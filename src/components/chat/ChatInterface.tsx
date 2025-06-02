@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, User, Bot, Loader2 } from 'lucide-react';
+import { Send, User, Bot, Loader2, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import FeedbackModal from '../FeedbackModal'; 
@@ -18,6 +18,13 @@ interface Message {
   timestamp: Date;
 }
 
+const suggestedQuestionsList = [
+  "Where's a good dog beach in San Diego?",
+  "Recommend low-cost vet services.",
+  "My dog got skunked! What do I do?",
+  "Find shelters for dog walking.",
+];
+
 const ChatInterface = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -26,6 +33,7 @@ const ChatInterface = () => {
   const [aiResponseCountInSession, setAiResponseCountInSession] = useState(0);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackSessionId, setFeedbackSessionId] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(true);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -39,22 +47,24 @@ const ChatInterface = () => {
   useEffect(() => {
     setCurrentSessionId(`session_${Date.now()}_${Math.random().toString(36).substring(7)}`);
     setAiResponseCountInSession(0);
+    setShowSuggestions(true); // Show suggestions for new sessions
   }, []);
 
-
-  const handleSendMessage = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  const processAndSendMessage = async (messageText: string) => {
+    if (!messageText.trim()) return;
 
     const userMessage: Message = {
       id: `user_${Date.now()}`,
-      text: input,
+      text: messageText,
       sender: 'user',
       timestamp: new Date(),
     };
     setMessages((prev) => [...prev, userMessage]);
-    setInput('');
+    if (input === messageText) { // Only clear input if it was the one typed/submitted via form
+        setInput('');
+    }
     setIsLoading(true);
+    if (showSuggestions) setShowSuggestions(false); // Hide suggestions after first message
 
     let aiMessageIdForErrorHandling: string | null = null;
 
@@ -65,7 +75,7 @@ const ChatInterface = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          question: userMessage.text,
+          question: messageText,
           user_identifier: userIdentifier,
           session_id: currentSessionId,
          }),
@@ -73,27 +83,18 @@ const ChatInterface = () => {
 
       if (!response.ok) {
         let serverErrorMessage = '';
-        // Try to parse the error response body as JSON
         try {
           const errorBody = await response.json();
           if (errorBody && typeof errorBody.error === 'string') {
             serverErrorMessage = errorBody.error;
           }
         } catch (parseError) {
-          // Parsing JSON failed or no .error field.
           console.warn('Failed to parse error response JSON or extract .error message:', parseError);
         }
-
-        // Construct a detailed error message
         let detailedError = `API request failed with status ${response.status}`;
-        if (response.statusText) {
-          detailedError += `: ${response.statusText}`;
-        }
-        if (serverErrorMessage) {
-          detailedError += ` - Server Message: ${serverErrorMessage}`;
-        } else {
-          detailedError += ` - No detailed error message from server.`;
-        }
+        if (response.statusText) detailedError += `: ${response.statusText}`;
+        if (serverErrorMessage) detailedError += ` - Server Message: ${serverErrorMessage}`;
+        else detailedError += ` - No detailed error message from server.`;
         throw new Error(detailedError);
       }
       
@@ -105,7 +106,7 @@ const ChatInterface = () => {
       const decoder = new TextDecoder();
       let aiResponseText = '';
       const aiMessageId = `ai_${Date.now()}`;
-      aiMessageIdForErrorHandling = aiMessageId; // Store for potential cleanup
+      aiMessageIdForErrorHandling = aiMessageId;
 
       setMessages((prev) => [...prev, { id: aiMessageId, text: '', sender: 'ai', timestamp: new Date() }]);
 
@@ -139,18 +140,22 @@ const ChatInterface = () => {
         description: errorMessage,
         variant: 'destructive',
       });
-      // Remove the placeholder AI message if one was added and an error occurred
       if (aiMessageIdForErrorHandling) {
         setMessages((prevMessages) => prevMessages.filter(msg => msg.id !== aiMessageIdForErrorHandling));
-      } else {
-         // If error happened before AI message placeholder was added, ensure last user message is still there
-         // and no phantom AI message is shown due to isLoading race condition.
-         // This might involve checking if the last message is from user and if isLoading was set right before.
-         // For simplicity, current logic might be okay, but can be refined if issues persist.
       }
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleFormSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    await processAndSendMessage(input);
+  };
+
+  const handleSuggestionClick = async (question: string) => {
+    setShowSuggestions(false); // Hide suggestions after one is clicked
+    await processAndSendMessage(question);
   };
 
   const handleFeedbackSubmit = async (feedbackText: string, helpful?: boolean) => {
@@ -175,10 +180,9 @@ const ChatInterface = () => {
     setFeedbackSessionId(null);
   };
 
-
   return (
-    <div className="flex flex-col h-full w-full"> {/* Wrapper for flex layout */}
-      <ScrollArea className="flex-grow w-full p-4" ref={scrollAreaRef}> {/* Changed: flex-grow, removed border-t/b */}
+    <div className="flex flex-col h-full w-full">
+      <ScrollArea className="flex-grow w-full p-4" ref={scrollAreaRef}>
         <div className="space-y-4">
           {messages.map((message) => (
             <div
@@ -215,7 +219,7 @@ const ChatInterface = () => {
               )}
             </div>
           ))}
-           {isLoading && messages[messages.length -1]?.sender === 'user' && (
+           {isLoading && messages.length > 0 && messages[messages.length -1]?.sender === 'user' && (
              <div className="flex items-end gap-2 justify-start">
                 <Avatar className="h-8 w-8">
                   <AvatarImage src="https://placehold.co/40x40.png" alt="PawPal AI" data-ai-hint="robot dog" />
@@ -228,7 +232,30 @@ const ChatInterface = () => {
           )}
         </div>
       </ScrollArea>
-      <form onSubmit={handleSendMessage} className="p-4 flex items-center gap-2 border-t bg-background"> {/* Changed: removed sticky bottom-0 */}
+
+      {showSuggestions && messages.length === 0 && (
+        <div className="p-4 border-t bg-background/50">
+          <p className="text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
+            <HelpCircle size={16} />
+            Not sure what to ask? Try one of these:
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {suggestedQuestionsList.map((q, i) => (
+              <Button
+                key={i}
+                variant="outline"
+                size="sm"
+                className="text-xs h-auto py-1.5 px-3 bg-card hover:bg-secondary"
+                onClick={() => handleSuggestionClick(q)}
+              >
+                {q}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <form onSubmit={handleFormSubmit} className="p-4 flex items-center gap-2 border-t bg-background">
         <Input
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -242,6 +269,7 @@ const ChatInterface = () => {
           <span className="ml-2 hidden sm:inline">Send</span>
         </Button>
       </form>
+
       {showFeedbackModal && feedbackSessionId && (
         <FeedbackModal
           isOpen={showFeedbackModal}
