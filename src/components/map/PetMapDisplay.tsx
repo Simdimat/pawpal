@@ -4,6 +4,11 @@ import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 
+// Static imports for Leaflet icon images
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -63,25 +68,28 @@ export default function PetMapDisplay() {
   const [mapIconsLoaded, setMapIconsLoaded] = useState(false);
   const [selectedMapLocation, setSelectedMapLocation] = useState<Place | null>(null);
 
-  const mapRef = useRef<any>(null); // For L.Map instance
+  const mapRef = useRef<any>(null); // For L.Map instance (Leaflet map instance)
   const markerRefs = useRef(new Map<string, any>()); // For L.Marker instances
 
   useEffect(() => {
     setClientMounted(true);
-    // Dynamically import Leaflet and fix icons
-    (async () => {
-      if (typeof window !== 'undefined') {
-        const L = await import('leaflet');
+    if (typeof window !== 'undefined') {
+      import('leaflet').then(L => {
         delete (L.Icon.Default.prototype as any)._getIconUrl;
         L.Icon.Default.mergeOptions({
-          iconRetinaUrl: (await import('leaflet/dist/images/marker-icon-2x.png')).default.src,
-          iconUrl: (await import('leaflet/dist/images/marker-icon.png')).default.src,
-          shadowUrl: (await import('leaflet/dist/images/marker-shadow.png')).default.src,
+          iconRetinaUrl: markerIcon2x.src,
+          iconUrl: markerIcon.src,
+          shadowUrl: markerShadow.src,
         });
         setMapIconsLoaded(true);
-      }
-    })();
+      }).catch(err => {
+        console.error("Failed to load Leaflet or set icons:", err);
+        setError("Map components failed to load.");
+        setMapIconsLoaded(false);
+      });
+    }
   }, []);
+
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -92,8 +100,8 @@ export default function PetMapDisplay() {
 
       try {
         const yelpCategoriesToFetch = filterOptions
-          .filter(f => f.yelpCategory) 
-          .map(f => ({ type: f.type, category: f.yelpCategory!, term: f.label }));
+          .filter(f => f.yelpCategory)
+          .map(f => ({ type: f.type as PlaceType, category: f.yelpCategory!, term: f.label }));
 
         for (const { type, category, term } of yelpCategoriesToFetch) {
             const yelpResponse = await fetch(`/api/yelp-search?term=${encodeURIComponent(term)}&location=${encodeURIComponent(SAN_DIEGO_LOCATION)}&categories=${encodeURIComponent(category)}&limit=10`);
@@ -113,11 +121,11 @@ export default function PetMapDisplay() {
                 }));
                 combinedLocations.push(...yelpPlaces);
             } else {
-                 console.warn(`Failed to fetch ${type} from Yelp`);
+                 console.warn(`Failed to fetch ${type} from Yelp: ${yelpResponse.statusText}`);
             }
         }
-        
-        if (filterOptions.some(f => f.petfinderType)) { // Check if any filter uses petfinder
+
+        if (filterOptions.some(f => f.petfinderType)) {
             const petfinderResponse = await fetch(`/api/petfinder-organizations?location=${encodeURIComponent(SAN_DIEGO_LOCATION)}&limit=10`);
             if (petfinderResponse.ok) {
                 const petfinderData: PetfinderOrganization[] = await petfinderResponse.json();
@@ -130,19 +138,18 @@ export default function PetMapDisplay() {
                     imageUrl: org.photos?.[0]?.medium,
                     websiteUrl: org.website || org.url,
                     dataAiHint: "animal shelter",
-                    latitude: undefined, // Petfinder orgs might not reliably provide coords
+                    latitude: undefined,
                     longitude: undefined,
                 }));
                 combinedLocations.push(...petfinderPlaces);
             } else {
-                console.warn('Failed to fetch shelters from Petfinder');
+                console.warn(`Failed to fetch shelters from Petfinder: ${petfinderResponse.statusText}`);
             }
         }
-        
+
         const uniqueLocations = Array.from(new Map(combinedLocations.map(item => [item.id, item])).values())
-                                  .filter(loc => loc.latitude && loc.longitude); // Ensure locations have coordinates for the map
+                                  .filter(loc => typeof loc.latitude === 'number' && typeof loc.longitude === 'number');
         setAllFetchedLocations(uniqueLocations);
-        // setDisplayedLocations(uniqueLocations); // Will be handled by applyFiltersAndSearch
       } catch (e: any) {
         console.error("Error fetching initial map locations:", e);
         setError("Failed to load location data. Please try again later.");
@@ -153,7 +160,7 @@ export default function PetMapDisplay() {
     fetchInitialData();
   }, []);
 
-  const applyFiltersAndSearch = () => {
+  useEffect(() => {
     let newFilteredPlaces = allFetchedLocations.filter(p => activeFilters.has(p.type as PlaceType));
     if (searchQuery) {
       newFilteredPlaces = newFilteredPlaces.filter(p =>
@@ -162,18 +169,15 @@ export default function PetMapDisplay() {
       );
     }
     setDisplayedLocations(newFilteredPlaces);
-    if (newFilteredPlaces.length === 0 && (searchQuery || activeFilters.size < filterOptions.length || activeFilters.size > 0 )) {
+
+    if (!isLoading && newFilteredPlaces.length === 0 && (searchQuery || activeFilters.size < filterOptions.length || (activeFilters.size > 0 && allFetchedLocations.length > 0) )) {
       setError("No locations match your current filters or search.");
-    } else {
-      setError(null); // Clear error if locations are found or no filters applied
+    } else if (!isLoading && newFilteredPlaces.length > 0) {
+      setError(null);
+    } else if (!isLoading && allFetchedLocations.length === 0 && activeFilters.size === filterOptions.length && !searchQuery){
+      setError(null);
     }
-  };
-  
-   useEffect(() => {
-    // Apply filters initially once allFetchedLocations is populated or if not loading
-    if (allFetchedLocations.length > 0 || !isLoading) {
-        applyFiltersAndSearch();
-    }
+
   }, [searchQuery, activeFilters, allFetchedLocations, isLoading]);
 
 
@@ -191,7 +195,6 @@ export default function PetMapDisplay() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    applyFiltersAndSearch();
   };
 
   const handleShowOnMap = (location: Place) => {
@@ -210,6 +213,15 @@ export default function PetMapDisplay() {
       }
     }
   }, [selectedMapLocation]);
+
+  useEffect(() => {
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, []);
 
   const canRenderMap = clientMounted && mapIconsLoaded;
 
@@ -313,9 +325,9 @@ export default function PetMapDisplay() {
           <CardContent>
             {isLoading && !canRenderMap && <div className="flex items-center justify-center text-sm text-muted-foreground py-4"><Loader2 className="w-5 h-5 mr-2 animate-spin"/>Loading locations...</div>}
             {error && <div className="mt-4 text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
-            
+
             {!isLoading && !error && displayedLocations.length > 0 ? (
-              <ScrollArea className="h-[200px] md:h-[calc(100vh-650px)] min-h-[200px]"> {/* Adjusted height calculation */}
+              <ScrollArea className="h-[200px] md:h-[calc(100vh-650px)] min-h-[200px]">
                 <div className="space-y-3">
                   {displayedLocations.map(loc => (
                     <div key={loc.id} className="p-3 border rounded-md bg-card hover:shadow-md transition-shadow">
@@ -325,7 +337,7 @@ export default function PetMapDisplay() {
                         width={300}
                         height={150}
                         className="w-full h-24 object-cover rounded-md mb-2"
-                        data-ai-hint={loc.dataAiHint}
+                        data-ai-hint={loc.dataAiHint || loc.type.toLowerCase()}
                       />
                       <h4 className="font-semibold text-md text-primary">{loc.name}</h4>
                       <p className="text-sm text-muted-foreground">{loc.type} - {loc.address}</p>
