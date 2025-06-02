@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
 
     let clientErrorMessage = 'Failed to get response from PawPal AI. Please check server logs for details.';
     const lowerErrorMessage = errorMessage.toLowerCase();
+    let httpStatus = 500; // Default status for internal errors
 
     if (lowerErrorMessage.includes('api key') || 
         lowerErrorMessage.includes('authentication') || 
@@ -99,11 +100,14 @@ export async function POST(request: NextRequest) {
         lowerErrorMessage.includes('quota') ||
         lowerErrorMessage.includes('unauthorized')) {
       clientErrorMessage = 'PawPal AI authentication or authorization error. Please ensure your AI service API key is correctly configured in the .env file and has necessary permissions/quota.';
+      httpStatus = 401; 
+    } else if (lowerErrorMessage.includes('503 service unavailable') || lowerErrorMessage.includes('model is overloaded') || lowerErrorMessage.includes('overloaded. please try')) {
+      clientErrorMessage = 'The PawPal AI service is temporarily overloaded or unavailable. This is usually a temporary issue with the AI provider. Please try again in a few moments.';
+      httpStatus = 503; 
     } else if (errorMessage) {
-      // Provide a snippet of the actual error if it's not API key related
-      clientErrorMessage = `PawPal AI service error: ${errorMessage.substring(0, 200)}${errorMessage.length > 200 ? '...' : ''}. Check server logs.`;
+      clientErrorMessage = `PawPal AI service error: ${errorMessage.substring(0, 150)}${errorMessage.length > 150 ? '...' : ''}. Check server logs for more details.`;
     }
     
-    return NextResponse.json({error: clientErrorMessage}, {status: 500});
+    return NextResponse.json({error: clientErrorMessage}, {status: httpStatus});
   }
 }
