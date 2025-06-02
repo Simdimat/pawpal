@@ -56,6 +56,8 @@ const ChatInterface = () => {
     setInput('');
     setIsLoading(true);
 
+    let aiMessageIdForErrorHandling: string | null = null;
+
     try {
       const userIdentifier = localStorage.getItem('pawpal_user_email') || sessionStorage.getItem('pawpal_browser_id') || 'anonymous_user';
 
@@ -69,14 +71,41 @@ const ChatInterface = () => {
          }),
       });
 
-      if (!response.ok || !response.body) {
-        throw new Error(`API error: ${response.statusText}`);
+      if (!response.ok) {
+        let serverErrorMessage = '';
+        // Try to parse the error response body as JSON
+        try {
+          const errorBody = await response.json();
+          if (errorBody && typeof errorBody.error === 'string') {
+            serverErrorMessage = errorBody.error;
+          }
+        } catch (parseError) {
+          // Parsing JSON failed or no .error field.
+          console.warn('Failed to parse error response JSON or extract .error message:', parseError);
+        }
+
+        // Construct a detailed error message
+        let detailedError = `API request failed with status ${response.status}`;
+        if (response.statusText) {
+          detailedError += `: ${response.statusText}`;
+        }
+        if (serverErrorMessage) {
+          detailedError += ` - Server Message: ${serverErrorMessage}`;
+        } else {
+          detailedError += ` - No detailed error message from server.`;
+        }
+        throw new Error(detailedError);
+      }
+      
+      if (!response.body) {
+        throw new Error('API call successful but no response body was received for streaming.');
       }
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let aiResponseText = '';
       const aiMessageId = `ai_${Date.now()}`;
+      aiMessageIdForErrorHandling = aiMessageId; // Store for potential cleanup
 
       setMessages((prev) => [...prev, { id: aiMessageId, text: '', sender: 'ai', timestamp: new Date() }]);
 
@@ -102,12 +131,23 @@ const ChatInterface = () => {
 
     } catch (error) {
       console.error('Error sending message:', error);
+      const errorMessage = (error instanceof Error && error.message) 
+        ? error.message 
+        : 'Could not get response from PawPal. Please try again.';
       toast({
         title: 'Error',
-        description: 'Could not get response from PawPal. Please try again.',
+        description: errorMessage,
         variant: 'destructive',
       });
-      setMessages((prevMessages) => prevMessages.filter(msg => msg.id !== `ai_${Date.now()}`)); // Ensure correct ID for removal
+      // Remove the placeholder AI message if one was added and an error occurred
+      if (aiMessageIdForErrorHandling) {
+        setMessages((prevMessages) => prevMessages.filter(msg => msg.id !== aiMessageIdForErrorHandling));
+      } else {
+         // If error happened before AI message placeholder was added, ensure last user message is still there
+         // and no phantom AI message is shown due to isLoading race condition.
+         // This might involve checking if the last message is from user and if isLoading was set right before.
+         // For simplicity, current logic might be okay, but can be refined if issues persist.
+      }
     } finally {
       setIsLoading(false);
     }
@@ -218,4 +258,3 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
-
