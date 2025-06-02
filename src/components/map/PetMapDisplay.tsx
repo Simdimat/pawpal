@@ -2,6 +2,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import type L from 'leaflet'; // Import Leaflet type for ref
 import 'leaflet/dist/leaflet.css';
 
 // Static imports for Leaflet icon images
@@ -15,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MapPin, Search, Filter, AlertTriangle, Loader2, ExternalLink, Eye } from "lucide-react";
+import { Filter, Search, AlertTriangle, Loader2, ExternalLink, Eye } from "lucide-react"; // Removed MapPin as it's now from Leaflet
 import Image from "next/image";
 import type { YelpBusiness } from '@/services/yelp';
 import type { PetfinderOrganization } from '@/services/petfinder';
@@ -65,17 +66,19 @@ export default function PetMapDisplay() {
   const [error, setError] = useState<string | null>(null);
 
   const [clientMounted, setClientMounted] = useState(false);
-  const [customLeafletIcon, setCustomLeafletIcon] = useState<any>(null); // Will hold L.Icon instance
+  const [leafletLib, setLeafletLib] = useState<typeof L | null>(null);
+  const [customLeafletIcon, setCustomLeafletIcon] = useState<L.Icon | null>(null);
   const [selectedMapLocation, setSelectedMapLocation] = useState<Place | null>(null);
 
-  const mapRef = useRef<any>(null); // For L.Map instance (Leaflet map instance)
-  const markerRefs = useRef(new Map<string, any>()); // For L.Marker instances
+  const mapRef = useRef<L.Map | null>(null);
+  const markerRefs = useRef(new Map<string, L.Marker>());
 
   useEffect(() => {
     setClientMounted(true);
     if (typeof window !== 'undefined') {
-      import('leaflet').then(L => {
-        const icon = new L.Icon({
+      import('leaflet').then(L_instance => {
+        setLeafletLib(L_instance);
+        const icon = new L_instance.Icon({
           iconUrl: markerIcon.src,
           iconRetinaUrl: markerIcon2x.src,
           shadowUrl: markerShadow.src,
@@ -90,6 +93,17 @@ export default function PetMapDisplay() {
         setError("Map components failed to load.");
       });
     }
+  }, []);
+
+  // Cleanup map instance on component unmount
+  useEffect(() => {
+    const mapInstanceToClean = mapRef.current;
+    return () => {
+      if (mapInstanceToClean) {
+        mapInstanceToClean.remove();
+      }
+      mapRef.current = null; // Ensure ref is cleared for potential remounts
+    };
   }, []);
 
 
@@ -140,7 +154,9 @@ export default function PetMapDisplay() {
                     imageUrl: org.photos?.[0]?.medium,
                     websiteUrl: org.website || org.url,
                     dataAiHint: "animal shelter",
-                    latitude: undefined, // Petfinder organizations often lack precise coordinates
+                    // Petfinder API often does not return precise lat/lng for orgs in search
+                    // Geocoding would be needed if precise map placement is critical and not provided
+                    latitude: undefined, 
                     longitude: undefined,
                 }));
                 combinedLocations.push(...petfinderPlaces);
@@ -148,9 +164,10 @@ export default function PetMapDisplay() {
                 console.warn(`Failed to fetch shelters from Petfinder: ${petfinderResponse.statusText}`);
             }
         }
-
+        
+        // Filter out locations that don't have coordinates, as they can't be mapped.
         const uniqueLocations = Array.from(new Map(combinedLocations.map(item => [item.id, item])).values())
-                                  .filter(loc => typeof loc.latitude === 'number' && typeof loc.longitude === 'number'); // Ensure only locations with coords are kept
+                                  .filter(loc => typeof loc.latitude === 'number' && typeof loc.longitude === 'number');
         setAllFetchedLocations(uniqueLocations);
       } catch (e: any) {
         console.error("Error fetching initial map locations:", e);
@@ -177,7 +194,6 @@ export default function PetMapDisplay() {
     } else if (!isLoading && newFilteredPlaces.length > 0) {
       setError(null);
     } else if (!isLoading && allFetchedLocations.length === 0 && activeFilters.size === filterOptions.length && !searchQuery){
-      // If no initial data and no filters/search applied, don't show "no results" yet, it might still be loading or truly empty
       setError(null); 
     }
 
@@ -218,19 +234,7 @@ export default function PetMapDisplay() {
     }
   }, [selectedMapLocation]);
 
-  useEffect(() => {
-    // Cleanup map instance on component unmount
-    const currentMapRef = mapRef.current;
-    return () => {
-      if (currentMapRef) {
-        currentMapRef.remove();
-      }
-      mapRef.current = null; // Clear the ref
-      markerRefs.current.clear();
-    };
-  }, []);
-
-  const canRenderMap = clientMounted && customLeafletIcon !== null;
+  const canRenderMap = clientMounted && leafletLib && customLeafletIcon !== null;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 min-h-[600px]">
@@ -254,7 +258,7 @@ export default function PetMapDisplay() {
             </div>
           </form>
           <Label className="font-semibold mb-2 block">Categories:</Label>
-          <ScrollArea className="flex-grow pr-3">
+          <ScrollArea className="flex-grow pr-3"> {/* Added pr-3 for scrollbar spacing */}
             <div className="space-y-2">
             {filterOptions.map(opt => (
               <div key={opt.id} className="flex items-center space-x-2">
@@ -280,7 +284,7 @@ export default function PetMapDisplay() {
               zoom={DEFAULT_ZOOM}
               scrollWheelZoom={true}
               style={{ height: '100%', width: '100%' }}
-              whenCreated={(mapInstance: any) => { mapRef.current = mapInstance; }}
+              whenCreated={(mapInstance: L.Map) => { mapRef.current = mapInstance; }}
             >
               <DynamicTileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -293,7 +297,7 @@ export default function PetMapDisplay() {
                       key={loc.id}
                       position={[loc.latitude, loc.longitude]}
                       icon={customLeafletIcon}
-                      whenCreated={(markerInstance: any) => { markerRefs.current.set(loc.id, markerInstance); }}
+                      whenCreated={(markerInstance: L.Marker) => { markerRefs.current.set(loc.id, markerInstance); }}
                     >
                       <DynamicPopup>
                         <div className="space-y-1">
@@ -322,8 +326,9 @@ export default function PetMapDisplay() {
               <p className="text-sm text-foreground/80">
                 Please wait while we prepare the interactive map.
               </p>
-              {!clientMounted && <p className="text-xs text-muted-foreground mt-1">Waiting for client...</p>}
-              {clientMounted && !customLeafletIcon && <p className="text-xs text-muted-foreground mt-1">Initializing map icons...</p>}
+               {!clientMounted && <p className="text-xs text-muted-foreground mt-1">Initializing client...</p>}
+               {clientMounted && !leafletLib && <p className="text-xs text-muted-foreground mt-1">Loading map library...</p>}
+               {clientMounted && leafletLib && !customLeafletIcon && <p className="text-xs text-muted-foreground mt-1">Initializing map icons...</p>}
             </div>
           )}
         </div>
@@ -337,8 +342,8 @@ export default function PetMapDisplay() {
             {error && <div className="mt-4 text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
 
             {!isLoading && !error && displayedLocations.length > 0 ? (
-              <ScrollArea className="h-[200px] md:h-[calc(100vh-650px)] min-h-[200px]">
-                <div className="space-y-3">
+               <ScrollArea className="h-[200px] md:h-[calc(100vh-650px)] min-h-[200px]"> {/* Adjusted height calculation for potentially smaller screens or more content above */}
+                <div className="space-y-3 pr-3"> {/* Added pr-3 for scrollbar spacing */}
                   {displayedLocations.map(loc => (
                     <div key={loc.id} className="p-3 border rounded-md bg-card hover:shadow-md transition-shadow">
                        <Image
@@ -348,6 +353,7 @@ export default function PetMapDisplay() {
                         height={150}
                         className="w-full h-24 object-cover rounded-md mb-2"
                         data-ai-hint={loc.dataAiHint || loc.type.toLowerCase()}
+                        unoptimized={loc.imageUrl?.includes('cloudfront.net')} // Petfinder images sometimes cause issues with optimizer
                       />
                       <h4 className="font-semibold text-md text-primary">{loc.name}</h4>
                       <p className="text-sm text-muted-foreground">{loc.type} - {loc.address}</p>
@@ -358,7 +364,7 @@ export default function PetMapDisplay() {
                           </a>
                         </Button>
                       )}
-                       <Button variant="outline" size="sm" className="mt-2 w-full text-xs" onClick={() => handleShowOnMap(loc)}>
+                       <Button variant="outline" size="sm" className="mt-2 w-full text-xs" onClick={() => handleShowOnMap(loc)} disabled={!loc.latitude || !loc.longitude}>
                         <Eye className="mr-2 h-3 w-3" /> Show on Map
                       </Button>
                     </div>
@@ -374,4 +380,3 @@ export default function PetMapDisplay() {
     </div>
   );
 }
-    
