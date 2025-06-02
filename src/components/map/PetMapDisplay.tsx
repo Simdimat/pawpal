@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -68,7 +69,7 @@ const PetMapDisplay = () => {
   const [mapCenter, setMapCenter] = useState<[number, number]>([32.7157, -117.1611]); // San Diego default
   const [mapZoom, setMapZoom] = useState(11);
   
-  const mapRef = useRef<L.Map | null>(null);
+  // const mapRef = useRef<L.Map | null>(null); // Removed as it's not used in the current component logic
 
   useEffect(() => {
     setMapReady(true); // Map is ready once component mounts on client
@@ -85,7 +86,6 @@ const PetMapDisplay = () => {
       // In real app: const response = await fetch(`/api/map/places?filters=${Array.from(filters).join(',')}&query=${query}`);
       // const data = await response.json(); setPlaces(data);
       
-      // For now, use initialPlaces and filter locally
       let newFilteredPlaces = initialPlaces.filter(p => filters.has(p.type));
       if (query) {
         newFilteredPlaces = newFilteredPlaces.filter(p => 
@@ -111,7 +111,7 @@ const PetMapDisplay = () => {
 
   useEffect(() => {
     fetchPlaces(activeFilters, searchQuery);
-  }, [activeFilters, searchQuery]); // searchQuery dependency removed to control search via button
+  }, [activeFilters, searchQuery]);
 
   const handleFilterChange = (type: Place['type'], checked: boolean) => {
     setActiveFilters(prev => {
@@ -180,7 +180,7 @@ const PetMapDisplay = () => {
             zoom={mapZoom} 
             scrollWheelZoom={true} 
             style={{ height: '100%', width: '100%' }}
-            whenCreated={(mapInstance) => { mapRef.current = mapInstance; }}
+            // whenCreated prop removed as mapRef is not used
         >
           <RecenterAutomatically lat={mapCenter[0]} lng={mapCenter[1]} zoom={mapZoom} />
           <TileLayer
