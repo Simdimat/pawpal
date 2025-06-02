@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Filter, Search, AlertTriangle, Loader2, ExternalLink, Eye } from "lucide-react";
+import { Filter, Search, AlertTriangle, Loader2, ExternalLink, Eye, ChevronDown } from "lucide-react";
 import Image from "next/image";
 import type { YelpBusiness } from '@/services/yelp';
 import type { PetfinderOrganization } from '@/services/petfinder';
@@ -182,14 +182,11 @@ export default function PetMapDisplay() {
     setDisplayedLocations(newFilteredPlaces);
 
     if (!isLoading && newFilteredPlaces.length === 0 && (searchQuery || activeFilters.size < filterOptions.length || (activeFilters.size > 0 && allFetchedLocations.length > 0) )) {
-      // Only set error if there was an active search/filter attempt that yielded no results,
-      // or if allFetchedLocations has items but current filters/search yield none.
       setError("No locations match your current filters or search.");
     } else if (!isLoading && newFilteredPlaces.length > 0) {
-      setError(null); // Clear error if we have results
+      setError(null); 
     } else if (!isLoading && allFetchedLocations.length === 0 && activeFilters.size === filterOptions.length && !searchQuery){
-      // Initial load, no filters/search, and no data from APIs yet (or APIs returned empty)
-      setError(null); // Don't show error in this specific initial empty state
+      setError(null); 
     }
 
   }, [searchQuery, activeFilters, allFetchedLocations, isLoading]);
@@ -209,7 +206,6 @@ export default function PetMapDisplay() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Search is already applied via useEffect on searchQuery change
   };
 
   const handleShowOnMap = (location: Place) => {
@@ -230,6 +226,7 @@ export default function PetMapDisplay() {
   }, [selectedMapLocation]);
 
   const canRenderMap = clientMounted && leafletLib && mapIconsConfigured;
+  const showScrollIndicator = !isLoading && !error && displayedLocations.length > 2; // Show if more than 2 items
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 min-h-[600px]">
@@ -287,7 +284,6 @@ export default function PetMapDisplay() {
               />
               {displayedLocations.map(loc => {
                 if (loc.latitude && loc.longitude && leafletLib) { 
-                  // Marker now uses the globally configured default icon
                   return (
                     <DynamicMarker
                       key={loc.id}
@@ -337,35 +333,43 @@ export default function PetMapDisplay() {
             {error && <div className="mt-4 text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
 
             {!isLoading && !error && displayedLocations.length > 0 ? (
-               <ScrollArea className="h-[200px] md:h-[calc(100vh-650px)] min-h-[200px]"> {/* Adjust height as needed */}
-                <div className="space-y-3 pr-3">
-                  {displayedLocations.map(loc => (
-                    <div key={loc.id} className="p-3 border rounded-md bg-card hover:shadow-md transition-shadow">
-                       <Image
-                        src={loc.imageUrl || `https://placehold.co/300x150.png?text=${encodeURIComponent(loc.name)}`}
-                        alt={loc.name}
-                        width={300}
-                        height={150}
-                        className="w-full h-24 object-cover rounded-md mb-2"
-                        data-ai-hint={loc.dataAiHint || loc.type.toLowerCase()}
-                        unoptimized={loc.imageUrl?.includes('cloudfront.net')} // For Petfinder CDN
-                      />
-                      <h4 className="font-semibold text-md text-primary">{loc.name}</h4>
-                      <p className="text-sm text-muted-foreground">{loc.type} - {loc.address}</p>
-                      {loc.websiteUrl && (
-                        <Button asChild variant="link" size="sm" className="mt-1 px-0 text-xs">
-                          <a href={loc.websiteUrl} target="_blank" rel="noopener noreferrer">
-                            Visit Website <ExternalLink className="ml-1 h-3 w-3" />
-                          </a>
+              <>
+                <ScrollArea className="h-[200px] md:h-[calc(100vh-650px)] min-h-[200px]"> {/* Adjust height as needed */}
+                  <div className="space-y-3 pr-3">
+                    {displayedLocations.map(loc => (
+                      <div key={loc.id} className="p-3 border rounded-md bg-card hover:shadow-md transition-shadow">
+                        <Image
+                          src={loc.imageUrl || `https://placehold.co/300x150.png?text=${encodeURIComponent(loc.name)}`}
+                          alt={loc.name}
+                          width={300}
+                          height={150}
+                          className="w-full h-24 object-cover rounded-md mb-2"
+                          data-ai-hint={loc.dataAiHint || loc.type.toLowerCase()}
+                          unoptimized={loc.imageUrl?.includes('cloudfront.net')} 
+                        />
+                        <h4 className="font-semibold text-md text-primary">{loc.name}</h4>
+                        <p className="text-sm text-muted-foreground">{loc.type} - {loc.address}</p>
+                        {loc.websiteUrl && (
+                          <Button asChild variant="link" size="sm" className="mt-1 px-0 text-xs">
+                            <a href={loc.websiteUrl} target="_blank" rel="noopener noreferrer">
+                              Visit Website <ExternalLink className="ml-1 h-3 w-3" />
+                            </a>
+                          </Button>
+                        )}
+                        <Button variant="outline" size="sm" className="mt-2 w-full text-xs" onClick={() => handleShowOnMap(loc)} disabled={!loc.latitude || !loc.longitude}>
+                          <Eye className="mr-2 h-3 w-3" /> Show on Map
                         </Button>
-                      )}
-                       <Button variant="outline" size="sm" className="mt-2 w-full text-xs" onClick={() => handleShowOnMap(loc)} disabled={!loc.latitude || !loc.longitude}>
-                        <Eye className="mr-2 h-3 w-3" /> Show on Map
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+                {showScrollIndicator && (
+                  <div className="text-center text-xs text-muted-foreground pt-2">
+                    <ChevronDown className="h-4 w-4 inline-block animate-bounce" />
+                    <span className="ml-1">Scroll for more</span>
+                  </div>
+                )}
+              </>
             ) : (
               !isLoading && !error && <p className="text-muted-foreground text-center py-4">No locations to display. Try adjusting your search or filters.</p>
             )}
