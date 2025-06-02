@@ -29,7 +29,7 @@ export default function RootLayout({
         <Providers>
           <Header />
           {/* The main tag in page.tsx will now handle the flex-grow for its content area */}
-          <div className="flex-grow container mx-auto px-4 py-8">
+          <div className="relative z-0 flex-grow container mx-auto px-4 py-8">
             {children}
           </div>
           <Footer />
