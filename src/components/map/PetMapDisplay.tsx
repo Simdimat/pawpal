@@ -4,7 +4,8 @@
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
-// L is imported dynamically in useEffect
+import type { Map as LeafletMap } from 'leaflet'; // For map instance type
+
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -12,7 +13,6 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Filter, Search, Loader2, AlertTriangle } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { Map as LeafletMap } from 'leaflet';
 
 interface Place {
   id: string;
@@ -46,6 +46,7 @@ const DynamicMarker = dynamic(() => import('react-leaflet').then((mod) => mod.Ma
 const DynamicPopup = dynamic(() => import('react-leaflet').then((mod) => mod.Popup), { ssr: false });
 const useMap = dynamic(() => import('react-leaflet').then((mod) => mod.useMap), { ssr: false });
 
+
 const RecenterAutomatically = ({lat, lng, zoom} : {lat: number, lng: number, zoom: number}) => {
   const mapHook = useMap ? useMap() : null;
    useEffect(() => {
@@ -65,10 +66,12 @@ const PetMapDisplay = () => {
   const [activeFilters, setActiveFilters] = useState<Set<Place['type']>>(
     new Set(filterOptions.map(f => f.type))
   );
-  const [loading, setLoading] = useState(false); // For data fetching
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number]>([32.7157, -117.1611]);
   const [mapZoom, setMapZoom] = useState(11);
+  const mapInstanceRef = useRef<LeafletMap | null>(null);
+
 
   useEffect(() => {
     setClientMounted(true);
@@ -76,7 +79,7 @@ const PetMapDisplay = () => {
 
   useEffect(() => {
     const setupMapEnvironment = async () => {
-      if (typeof window !== 'undefined') {
+      if (clientMounted && typeof window !== 'undefined') {
         try {
           const L = (await import('leaflet')).default;
           if (L && L.Icon && L.Icon.Default) {
@@ -92,19 +95,28 @@ const PetMapDisplay = () => {
         } catch (e) {
           console.error("Error fixing Leaflet icons:", e);
         }
+        setMapReady(true);
       }
-      setMapReady(true);
     };
 
-    if (clientMounted) {
-      setupMapEnvironment();
-    }
+    setupMapEnvironment();
   }, [clientMounted]);
+
+  // Effect for explicit map cleanup
+  useEffect(() => {
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, []);
+
 
   const fetchPlaces = async (filters: Set<Place['type']>, query?: string) => {
     setLoading(true);
     setError(null);
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
     try {
       let newFilteredPlaces = initialPlaces.filter(p => filters.has(p.type));
       if (query) {
@@ -202,6 +214,9 @@ const PetMapDisplay = () => {
               zoom={mapZoom}
               scrollWheelZoom={true}
               style={{ height: '100%', width: '100%' }}
+              whenCreated={(map: LeafletMap) => { // Added type here for clarity
+                mapInstanceRef.current = map;
+              }}
           >
             <RecenterAutomatically lat={mapCenter[0]} lng={mapCenter[1]} zoom={mapZoom} />
             <DynamicTileLayer
