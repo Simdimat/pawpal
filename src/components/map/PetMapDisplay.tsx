@@ -1,17 +1,25 @@
 
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import dynamic from 'next/dynamic';
+import 'leaflet/dist/leaflet.css';
+
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MapPin, Search, Filter, AlertTriangle, Loader2, ExternalLink } from "lucide-react";
+import { MapPin, Search, Filter, AlertTriangle, Loader2, ExternalLink, Eye } from "lucide-react";
 import Image from "next/image";
 import type { YelpBusiness } from '@/services/yelp';
 import type { PetfinderOrganization } from '@/services/petfinder';
 
+// Dynamically import react-leaflet components
+const DynamicMapContainer = dynamic(() => import('react-leaflet').then(mod => mod.MapContainer), { ssr: false });
+const DynamicTileLayer = dynamic(() => import('react-leaflet').then(mod => mod.TileLayer), { ssr: false });
+const DynamicMarker = dynamic(() => import('react-leaflet').then(mod => mod.Marker), { ssr: false });
+const DynamicPopup = dynamic(() => import('react-leaflet').then(mod => mod.Popup), { ssr: false });
 
 type PlaceType = 'Park' | 'Beach' | 'Vet' | 'Restaurant' | 'Shelter';
 
@@ -27,18 +35,19 @@ interface BasePlace {
   longitude?: number;
 }
 
-// Combine types for a unified Place interface
 interface Place extends BasePlace, Partial<YelpBusiness>, Partial<PetfinderOrganization> {}
-
 
 const filterOptions: { id: string; label: string; type: PlaceType; yelpCategory?: string; petfinderType?: boolean }[] = [
   { id: 'parks', label: 'Dog Parks', type: 'Park', yelpCategory: 'dogparks' },
-  { id: 'beaches', label: 'Dog Beaches', type: 'Beach', yelpCategory: 'beaches' }, // Assuming Yelp might have 'dogbeach' or similar under beaches
+  { id: 'beaches', label: 'Dog Beaches', type: 'Beach', yelpCategory: 'beaches,dog_friendly' },
   { id: 'vets', label: 'Vets', type: 'Vet', yelpCategory: 'veterinarians' },
   { id: 'restaurants', label: 'Pet-Friendly Restaurants', type: 'Restaurant', yelpCategory: 'restaurants,petfriendly' },
   { id: 'shelters', label: 'Shelters', type: 'Shelter', petfinderType: true },
 ];
 
+const SAN_DIEGO_COORDS: [number, number] = [32.7157, -117.1611];
+const DEFAULT_ZOOM = 11;
+const FOCUSED_ZOOM = 15;
 
 export default function PetMapDisplay() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,22 +56,44 @@ export default function PetMapDisplay() {
   );
   const [allFetchedLocations, setAllFetchedLocations] = useState<Place[]>([]);
   const [displayedLocations, setDisplayedLocations] = useState<Place[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // Start loading initially
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const SAN_DIEGO_LOCATION = "San Diego, CA";
+  const [clientMounted, setClientMounted] = useState(false);
+  const [mapIconsLoaded, setMapIconsLoaded] = useState(false);
+  const [selectedMapLocation, setSelectedMapLocation] = useState<Place | null>(null);
+
+  const mapRef = useRef<any>(null); // For L.Map instance
+  const markerRefs = useRef(new Map<string, any>()); // For L.Marker instances
+
+  useEffect(() => {
+    setClientMounted(true);
+    // Dynamically import Leaflet and fix icons
+    (async () => {
+      if (typeof window !== 'undefined') {
+        const L = await import('leaflet');
+        delete (L.Icon.Default.prototype as any)._getIconUrl;
+        L.Icon.Default.mergeOptions({
+          iconRetinaUrl: (await import('leaflet/dist/images/marker-icon-2x.png')).default.src,
+          iconUrl: (await import('leaflet/dist/images/marker-icon.png')).default.src,
+          shadowUrl: (await import('leaflet/dist/images/marker-shadow.png')).default.src,
+        });
+        setMapIconsLoaded(true);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     const fetchInitialData = async () => {
       setIsLoading(true);
       setError(null);
       let combinedLocations: Place[] = [];
+      const SAN_DIEGO_LOCATION = "San Diego, CA";
 
       try {
-        // Fetch Yelp locations (Parks, Beaches, Vets, Restaurants)
         const yelpCategoriesToFetch = filterOptions
-          .filter(f => f.yelpCategory && activeFilters.has(f.type))
-          .map(f => ({ type: f.type, category: f.yelpCategory!, term: f.label })); // Using label as a broad term
+          .filter(f => f.yelpCategory) 
+          .map(f => ({ type: f.type, category: f.yelpCategory!, term: f.label }));
 
         for (const { type, category, term } of yelpCategoriesToFetch) {
             const yelpResponse = await fetch(`/api/yelp-search?term=${encodeURIComponent(term)}&location=${encodeURIComponent(SAN_DIEGO_LOCATION)}&categories=${encodeURIComponent(category)}&limit=10`);
@@ -72,6 +103,7 @@ export default function PetMapDisplay() {
                     ...biz,
                     id: `yelp-${biz.id}`,
                     type: type,
+                    name: biz.name,
                     address: biz.location?.display_address.join(', '),
                     imageUrl: biz.image_url,
                     websiteUrl: biz.url,
@@ -85,8 +117,7 @@ export default function PetMapDisplay() {
             }
         }
         
-        // Fetch Petfinder locations (Shelters)
-        if (activeFilters.has('Shelter')) {
+        if (filterOptions.some(f => f.petfinderType)) { // Check if any filter uses petfinder
             const petfinderResponse = await fetch(`/api/petfinder-organizations?location=${encodeURIComponent(SAN_DIEGO_LOCATION)}&limit=10`);
             if (petfinderResponse.ok) {
                 const petfinderData: PetfinderOrganization[] = await petfinderResponse.json();
@@ -99,7 +130,8 @@ export default function PetMapDisplay() {
                     imageUrl: org.photos?.[0]?.medium,
                     websiteUrl: org.website || org.url,
                     dataAiHint: "animal shelter",
-                    // Petfinder API might not always have coordinates directly for orgs
+                    latitude: undefined, // Petfinder orgs might not reliably provide coords
+                    longitude: undefined,
                 }));
                 combinedLocations.push(...petfinderPlaces);
             } else {
@@ -107,11 +139,10 @@ export default function PetMapDisplay() {
             }
         }
         
-        // Remove duplicates by ID before setting
-        const uniqueLocations = Array.from(new Map(combinedLocations.map(item => [item.id, item])).values());
+        const uniqueLocations = Array.from(new Map(combinedLocations.map(item => [item.id, item])).values())
+                                  .filter(loc => loc.latitude && loc.longitude); // Ensure locations have coordinates for the map
         setAllFetchedLocations(uniqueLocations);
-        setDisplayedLocations(uniqueLocations);
-
+        // setDisplayedLocations(uniqueLocations); // Will be handled by applyFiltersAndSearch
       } catch (e: any) {
         console.error("Error fetching initial map locations:", e);
         setError("Failed to load location data. Please try again later.");
@@ -119,14 +150,10 @@ export default function PetMapDisplay() {
         setIsLoading(false);
       }
     };
-
     fetchInitialData();
-  }, []); // Run once on mount to get all data types
+  }, []);
 
   const applyFiltersAndSearch = () => {
-    setIsLoading(true);
-    setError(null);
-    
     let newFilteredPlaces = allFetchedLocations.filter(p => activeFilters.has(p.type as PlaceType));
     if (searchQuery) {
       newFilteredPlaces = newFilteredPlaces.filter(p =>
@@ -134,23 +161,19 @@ export default function PetMapDisplay() {
         (p.address && p.address.toLowerCase().includes(searchQuery.toLowerCase()))
       );
     }
-    
     setDisplayedLocations(newFilteredPlaces);
     if (newFilteredPlaces.length === 0 && (searchQuery || activeFilters.size < filterOptions.length || activeFilters.size > 0 )) {
       setError("No locations match your current filters or search.");
+    } else {
+      setError(null); // Clear error if locations are found or no filters applied
     }
-    setIsLoading(false);
   };
   
-  // Re-filter when activeFilters or searchQuery changes, but debounce/delay search
    useEffect(() => {
-    const handler = setTimeout(() => {
-        // Only apply if allFetchedLocations has data, otherwise initial load handles it
-        if (allFetchedLocations.length > 0 || !isLoading) { 
-            applyFiltersAndSearch();
-        }
-    }, 300); // Debounce search/filter application
-    return () => clearTimeout(handler);
+    // Apply filters initially once allFetchedLocations is populated or if not loading
+    if (allFetchedLocations.length > 0 || !isLoading) {
+        applyFiltersAndSearch();
+    }
   }, [searchQuery, activeFilters, allFetchedLocations, isLoading]);
 
 
@@ -162,15 +185,33 @@ export default function PetMapDisplay() {
       } else {
         newFilters.delete(type);
       }
-      return newFilters; // applyFiltersAndSearch will be triggered by useEffect
+      return newFilters;
     });
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    applyFiltersAndSearch(); // Explicit search trigger
+    applyFiltersAndSearch();
   };
 
+  const handleShowOnMap = (location: Place) => {
+    setSelectedMapLocation(location);
+  };
+
+  useEffect(() => {
+    if (selectedMapLocation && mapRef.current && markerRefs.current.has(selectedMapLocation.id)) {
+      const { latitude, longitude } = selectedMapLocation;
+      if (latitude && longitude) {
+        mapRef.current.flyTo([latitude, longitude], FOCUSED_ZOOM);
+        const marker = markerRefs.current.get(selectedMapLocation.id);
+        if (marker) {
+          marker.openPopup();
+        }
+      }
+    }
+  }, [selectedMapLocation]);
+
+  const canRenderMap = clientMounted && mapIconsLoaded;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 min-h-[600px]">
@@ -214,23 +255,55 @@ export default function PetMapDisplay() {
 
       <div className="md:col-span-2 space-y-4">
         <div className="h-[300px] md:h-[400px] bg-muted rounded-lg shadow-inner flex items-center justify-center relative overflow-hidden border">
-          <Image
-              src="https://placehold.co/800x600.png"
-              alt="Placeholder map of San Diego pet-friendly locations"
-              layout="fill"
-              objectFit="cover"
-              data-ai-hint="map san diego"
-              priority
-            />
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 p-4">
-            <MapPin className="h-12 w-12 text-primary mb-3" />
-            <p className="text-center text-lg font-semibold text-background">
-              Interactive Map Area
-            </p>
-            <p className="text-center text-sm text-background/80 max-w-md">
-              This section will display an interactive map. For now, please use the filters and search to browse locations listed below.
-            </p>
-          </div>
+          {canRenderMap ? (
+            <DynamicMapContainer
+              center={SAN_DIEGO_COORDS}
+              zoom={DEFAULT_ZOOM}
+              scrollWheelZoom={true}
+              style={{ height: '100%', width: '100%' }}
+              whenCreated={(mapInstance: any) => { mapRef.current = mapInstance; }}
+            >
+              <DynamicTileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              {displayedLocations.map(loc => {
+                if (loc.latitude && loc.longitude) {
+                  return (
+                    <DynamicMarker
+                      key={loc.id}
+                      position={[loc.latitude, loc.longitude]}
+                      whenCreated={(markerInstance: any) => { markerRefs.current.set(loc.id, markerInstance); }}
+                    >
+                      <DynamicPopup>
+                        <div className="space-y-1">
+                          <h4 className="font-semibold text-md text-primary">{loc.name}</h4>
+                          <p className="text-sm text-muted-foreground">{loc.type}</p>
+                          {loc.address && <p className="text-xs">{loc.address}</p>}
+                          {loc.websiteUrl && (
+                            <Button asChild variant="link" size="sm" className="p-0 h-auto text-xs">
+                              <a href={loc.websiteUrl} target="_blank" rel="noopener noreferrer">
+                                Visit Website <ExternalLink className="ml-1 h-3 w-3" />
+                              </a>
+                            </Button>
+                          )}
+                        </div>
+                      </DynamicPopup>
+                    </DynamicMarker>
+                  );
+                }
+                return null;
+              })}
+            </DynamicMapContainer>
+          ) : (
+            <div className="flex flex-col items-center justify-center text-center p-4">
+              <Loader2 className="h-12 w-12 text-primary mb-3 animate-spin" />
+              <p className="text-lg font-semibold text-foreground">Loading Map...</p>
+              <p className="text-sm text-foreground/80">
+                Please wait while we prepare the interactive map.
+              </p>
+            </div>
+          )}
         </div>
 
         <Card className="shadow-md">
@@ -238,11 +311,11 @@ export default function PetMapDisplay() {
             <CardTitle className="font-headline">Matching Locations</CardTitle>
           </CardHeader>
           <CardContent>
-             {isLoading && <div className="flex items-center justify-center text-sm text-muted-foreground py-4"><Loader2 className="w-5 h-5 mr-2 animate-spin"/>Loading locations...</div>}
+            {isLoading && !canRenderMap && <div className="flex items-center justify-center text-sm text-muted-foreground py-4"><Loader2 className="w-5 h-5 mr-2 animate-spin"/>Loading locations...</div>}
             {error && <div className="mt-4 text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
             
             {!isLoading && !error && displayedLocations.length > 0 ? (
-              <ScrollArea className="h-[200px] md:h-[calc(100vh-550px)] min-h-[200px]">
+              <ScrollArea className="h-[200px] md:h-[calc(100vh-650px)] min-h-[200px]"> {/* Adjusted height calculation */}
                 <div className="space-y-3">
                   {displayedLocations.map(loc => (
                     <div key={loc.id} className="p-3 border rounded-md bg-card hover:shadow-md transition-shadow">
@@ -263,8 +336,8 @@ export default function PetMapDisplay() {
                           </a>
                         </Button>
                       )}
-                       <Button variant="outline" size="sm" className="mt-2 w-full text-xs" onClick={() => alert(`Future: Show ${loc.name} on interactive map (Lat: ${loc.latitude}, Lng: ${loc.longitude})`)}>
-                        Show on Map (Placeholder)
+                       <Button variant="outline" size="sm" className="mt-2 w-full text-xs" onClick={() => handleShowOnMap(loc)}>
+                        <Eye className="mr-2 h-3 w-3" /> Show on Map
                       </Button>
                     </div>
                   ))}
@@ -279,3 +352,5 @@ export default function PetMapDisplay() {
     </div>
   );
 }
+
+    
