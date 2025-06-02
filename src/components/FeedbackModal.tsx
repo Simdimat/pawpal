@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ThumbsUp, ThumbsDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface FeedbackModalProps {
   isOpen: boolean;
@@ -100,4 +101,3 @@ const FeedbackModal = ({ isOpen, onClose, onSubmit, sessionId }: FeedbackModalPr
 };
 
 export default FeedbackModal;
-
