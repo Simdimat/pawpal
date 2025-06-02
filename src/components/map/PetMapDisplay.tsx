@@ -65,7 +65,7 @@ export default function PetMapDisplay() {
   const [error, setError] = useState<string | null>(null);
 
   const [clientMounted, setClientMounted] = useState(false);
-  const [mapIconsLoaded, setMapIconsLoaded] = useState(false);
+  const [customLeafletIcon, setCustomLeafletIcon] = useState<any>(null); // Will hold L.Icon instance
   const [selectedMapLocation, setSelectedMapLocation] = useState<Place | null>(null);
 
   const mapRef = useRef<any>(null); // For L.Map instance (Leaflet map instance)
@@ -75,17 +75,19 @@ export default function PetMapDisplay() {
     setClientMounted(true);
     if (typeof window !== 'undefined') {
       import('leaflet').then(L => {
-        delete (L.Icon.Default.prototype as any)._getIconUrl;
-        L.Icon.Default.mergeOptions({
-          iconRetinaUrl: markerIcon2x.src,
+        const icon = new L.Icon({
           iconUrl: markerIcon.src,
+          iconRetinaUrl: markerIcon2x.src,
           shadowUrl: markerShadow.src,
+          iconSize: [25, 41],
+          iconAnchor: [12, 41],
+          popupAnchor: [1, -34],
+          shadowSize: [41, 41],
         });
-        setMapIconsLoaded(true);
+        setCustomLeafletIcon(icon);
       }).catch(err => {
-        console.error("Failed to load Leaflet or set icons:", err);
+        console.error("Failed to load Leaflet or create custom icon:", err);
         setError("Map components failed to load.");
-        setMapIconsLoaded(false);
       });
     }
   }, []);
@@ -138,7 +140,7 @@ export default function PetMapDisplay() {
                     imageUrl: org.photos?.[0]?.medium,
                     websiteUrl: org.website || org.url,
                     dataAiHint: "animal shelter",
-                    latitude: undefined,
+                    latitude: undefined, // Petfinder organizations often lack precise coordinates
                     longitude: undefined,
                 }));
                 combinedLocations.push(...petfinderPlaces);
@@ -148,7 +150,7 @@ export default function PetMapDisplay() {
         }
 
         const uniqueLocations = Array.from(new Map(combinedLocations.map(item => [item.id, item])).values())
-                                  .filter(loc => typeof loc.latitude === 'number' && typeof loc.longitude === 'number');
+                                  .filter(loc => typeof loc.latitude === 'number' && typeof loc.longitude === 'number'); // Ensure only locations with coords are kept
         setAllFetchedLocations(uniqueLocations);
       } catch (e: any) {
         console.error("Error fetching initial map locations:", e);
@@ -175,7 +177,8 @@ export default function PetMapDisplay() {
     } else if (!isLoading && newFilteredPlaces.length > 0) {
       setError(null);
     } else if (!isLoading && allFetchedLocations.length === 0 && activeFilters.size === filterOptions.length && !searchQuery){
-      setError(null);
+      // If no initial data and no filters/search applied, don't show "no results" yet, it might still be loading or truly empty
+      setError(null); 
     }
 
   }, [searchQuery, activeFilters, allFetchedLocations, isLoading]);
@@ -195,6 +198,7 @@ export default function PetMapDisplay() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Search is applied reactively via useEffect on searchQuery
   };
 
   const handleShowOnMap = (location: Place) => {
@@ -215,15 +219,18 @@ export default function PetMapDisplay() {
   }, [selectedMapLocation]);
 
   useEffect(() => {
+    // Cleanup map instance on component unmount
+    const currentMapRef = mapRef.current;
     return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
+      if (currentMapRef) {
+        currentMapRef.remove();
       }
+      mapRef.current = null; // Clear the ref
+      markerRefs.current.clear();
     };
   }, []);
 
-  const canRenderMap = clientMounted && mapIconsLoaded;
+  const canRenderMap = clientMounted && customLeafletIcon !== null;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 min-h-[600px]">
@@ -280,11 +287,12 @@ export default function PetMapDisplay() {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
               {displayedLocations.map(loc => {
-                if (loc.latitude && loc.longitude) {
+                if (loc.latitude && loc.longitude && customLeafletIcon) {
                   return (
                     <DynamicMarker
                       key={loc.id}
                       position={[loc.latitude, loc.longitude]}
+                      icon={customLeafletIcon}
                       whenCreated={(markerInstance: any) => { markerRefs.current.set(loc.id, markerInstance); }}
                     >
                       <DynamicPopup>
@@ -314,6 +322,8 @@ export default function PetMapDisplay() {
               <p className="text-sm text-foreground/80">
                 Please wait while we prepare the interactive map.
               </p>
+              {!clientMounted && <p className="text-xs text-muted-foreground mt-1">Waiting for client...</p>}
+              {clientMounted && !customLeafletIcon && <p className="text-xs text-muted-foreground mt-1">Initializing map icons...</p>}
             </div>
           )}
         </div>
@@ -323,7 +333,7 @@ export default function PetMapDisplay() {
             <CardTitle className="font-headline">Matching Locations</CardTitle>
           </CardHeader>
           <CardContent>
-            {isLoading && !canRenderMap && <div className="flex items-center justify-center text-sm text-muted-foreground py-4"><Loader2 className="w-5 h-5 mr-2 animate-spin"/>Loading locations...</div>}
+            {isLoading && <div className="flex items-center justify-center text-sm text-muted-foreground py-4"><Loader2 className="w-5 h-5 mr-2 animate-spin"/>Loading locations...</div>}
             {error && <div className="mt-4 text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
 
             {!isLoading && !error && displayedLocations.length > 0 ? (
@@ -364,5 +374,4 @@ export default function PetMapDisplay() {
     </div>
   );
 }
-
     
