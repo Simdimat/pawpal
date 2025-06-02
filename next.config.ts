@@ -37,6 +37,10 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'dl5zpyw5k3jtl.cloudfront.net',
       },
+      { // Another Petfinder image hostname
+        protocol: 'https',
+        hostname: 'dl5zpyw5k3jeb.cloudfront.net',
+      },
       {
         protocol: 'https',
         hostname: 'photos.petfinder.com',
