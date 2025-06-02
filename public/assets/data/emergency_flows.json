@@ -1,0 +1,111 @@
+[
+  {
+    "id": "skunk_spray",
+    "name": "Dog Sprayed by Skunk",
+    "description": "Steps to take if your dog has been sprayed by a skunk.",
+    "immediateActions": [
+      "Keep your dog outside to prevent the smell from spreading indoors.",
+      "Check your dog's eyes for redness or irritation. If affected, rinse gently with cool water or pet-safe eyewash."
+    ],
+    "steps": [
+      {
+        "title": "Gather Supplies",
+        "details": "You'll need: Rubber gloves, old towels, skunk shampoo (or a de-skunking solution: 1 quart of 3% hydrogen peroxide solution, 1/4 cup baking soda, 1 teaspoon liquid dish soap). Mix solution right before use, do not store.",
+        "important": true
+      },
+      {
+        "title": "Apply Solution (Avoid Eyes)",
+        "details": "Wearing gloves, apply the de-skunking solution to your dog's dry fur, avoiding the eyes and mouth. Lather well and let it sit for 5-10 minutes. Be careful, peroxide can bleach fur."
+      },
+      {
+        "title": "Rinse Thoroughly",
+        "details": "Rinse your dog completely with lukewarm water. Ensure all solution is removed."
+      },
+      {
+        "title": "Wash with Pet Shampoo",
+        "details": "Follow up with a regular pet shampoo to remove any residue."
+      },
+      {
+        "title": "Towel Dry",
+        "details": "Dry your dog thoroughly with old towels."
+      },
+      {
+        "title": "Monitor Your Dog",
+        "details": "Watch for any signs of illness, irritation, or excessive drooling. Contact your vet if concerned."
+      }
+    ],
+    "relevantContacts": [
+      { "name": "Your Veterinarian", "number": "(Your Vet's Number)", "website": "(Your Vet's Website)"},
+      { "name": "ASPCA Animal Poison Control Center", "number": "(888) 426-4435" }
+    ]
+  },
+  {
+    "id": "found_stray",
+    "name": "Found a Stray Animal",
+    "description": "What to do if you find a lost or stray pet.",
+    "immediateActions": [
+      "Approach cautiously. The animal may be scared or injured.",
+      "If the animal appears aggressive or you feel unsafe, do not approach. Call animal control.",
+      "Check for a collar and ID tags."
+    ],
+    "steps": [
+      {
+        "title": "Provide Safety (If Possible)",
+        "details": "If safe to do so, confine the animal in a secure area (e.g., fenced yard, garage, crate) with fresh water. Keep separate from your own pets."
+      },
+      {
+        "title": "Check for Microchip",
+        "details": "Take the animal to a local vet clinic or animal shelter to scan for a microchip. This is usually a free service."
+      },
+      {
+        "title": "Notify Local Shelters & Animal Control",
+        "details": "Report the found animal to San Diego Humane Society, County Animal Services, and other local shelters. Provide a description, location found, and your contact info."
+      },
+      {
+        "title": "Use Social Media & Online Resources",
+        "details": "Post on local lost & found pet groups (e.g., Facebook, Nextdoor, PawBoost, Petco Love Lost). Include a photo, location, and date found."
+      },
+      {
+        "title": "Put Up Flyers",
+        "details": "Consider putting up 'Found Pet' flyers in the neighborhood where the animal was found."
+      }
+    ],
+    "relevantContacts": [
+      { "name": "San Diego Humane Society", "website": "https://www.sdhumane.org/services/lost-and-found/" },
+      { "name": "San Diego County Animal Services", "website": "https://www.sddac.com/content/sdc/das/lost-found.html" }
+    ]
+  },
+  {
+    "id": "rattlesnake_bite",
+    "name": "Rattlesnake Bite on Pet",
+    "description": "Critical steps if your pet is bitten by a rattlesnake.",
+    "immediateActions": [
+      "Stay calm, but act quickly. Keep your pet as still and quiet as possible.",
+      "Identify the snake if possible, but DO NOT attempt to catch or kill it.",
+      "Immediately seek veterinary attention. This is a life-threatening emergency."
+    ],
+    "steps": [
+      {
+        "title": "Go to a Vet IMMEDIATELY",
+        "details": "This is the most critical step. Call ahead to the nearest emergency vet to let them know you are coming. Antivenom is often needed.",
+        "important": true
+      },
+      {
+        "title": "Keep Bite Area Below Heart Level",
+        "details": "If possible, try to keep the bitten area lower than the level of the pet's heart."
+      },
+      {
+        "title": "DO NOT Do These Things",
+        "details": "DO NOT apply a tourniquet. DO NOT cut the wound. DO NOT try to suck out venom. DO NOT apply ice or heat. DO NOT give any medications unless directed by a vet."
+      },
+      {
+        "title": "Note Time of Bite",
+        "details": "Try to remember the approximate time the bite occurred."
+      }
+    ],
+    "relevantContacts": [
+      { "name": "Pet Poison Helpline", "number": "(855) 764-7661" },
+      { "name": "List of 24-Hour Emergency Vets in San Diego", "website": "(Link to Yelp search or curated list)"}
+    ]
+  }
+]

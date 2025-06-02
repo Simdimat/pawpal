@@ -1,1 +1,5 @@
-// Flows will be imported for their side effects in this file.
+import { config } from 'dotenv';
+config();
+
+import '@/ai/flows/emergency-flow-context.ts';
+import '@/ai/flows/ask-pawpal.ts';

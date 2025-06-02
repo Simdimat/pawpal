@@ -1,0 +1,21 @@
+{
+  "name": "PawPal SD",
+  "short_name": "PawPalSD",
+  "description": "Your AI Companion for San Diego Pet Life. Find vets, parks, emergency info, and more.",
+  "icons": [
+    {
+      "src": "/assets/images/logo-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/assets/images/logo-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F0F4F8",
+  "theme_color": "#64B5F6"
+}
