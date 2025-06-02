@@ -67,7 +67,7 @@ export default function PetMapDisplay() {
 
   const [clientMounted, setClientMounted] = useState(false);
   const [leafletLib, setLeafletLib] = useState<typeof L | null>(null);
-  const [customLeafletIcon, setCustomLeafletIcon] = useState<L.Icon | null>(null);
+  const [mapIconsConfigured, setMapIconsConfigured] = useState(false); // New state
   const [selectedMapLocation, setSelectedMapLocation] = useState<Place | null>(null);
 
   const mapRef = useRef<L.Map | null>(null);
@@ -77,8 +77,13 @@ export default function PetMapDisplay() {
     setClientMounted(true);
     if (typeof window !== 'undefined') {
       import('leaflet').then(L_instance => {
-        setLeafletLib(L_instance);
-        const icon = new L_instance.Icon({
+        setLeafletLib(L_instance); // Save L to state
+
+        // Configure Leaflet's default icon paths
+        // The delete line is a common hack for Webpack/Leaflet icon path issues.
+        delete L_instance.Icon.Default.prototype._getIconUrl;
+
+        L_instance.Icon.Default.mergeOptions({
           iconUrl: markerIcon.src,
           iconRetinaUrl: markerIcon2x.src,
           shadowUrl: markerShadow.src,
@@ -87,31 +92,33 @@ export default function PetMapDisplay() {
           popupAnchor: [1, -34],
           shadowSize: [41, 41],
         });
-        setCustomLeafletIcon(icon);
+        setMapIconsConfigured(true); // Signal that icons are configured
+
       }).catch(err => {
-        console.error("Failed to load Leaflet or create custom icon:", err);
+        console.error("Failed to load Leaflet or configure icons:", err);
         setError("Map components failed to load.");
       });
     }
   }, []);
 
-  // Corrected cleanup for map instance
   useEffect(() => {
+    // Cleanup map instance on component unmount
     return () => {
       if (mapRef.current) {
-        try {
-          // Check if map container is still part of the document to prevent errors
-          if (mapRef.current.getContainer() && document.body.contains(mapRef.current.getContainer())) {
+        // Check if map container is still part of the document to prevent errors
+        // during fast refreshes or strict mode unmount/remounts.
+        const mapContainer = mapRef.current.getContainer();
+        if (mapContainer && document.body.contains(mapContainer)) {
+          try {
             mapRef.current.remove();
+          } catch (e) {
+            console.warn("Error during map cleanup:", e);
           }
-        } catch (e) {
-          // Log error during cleanup if any, but don't let it break the app
-          console.warn("Error during map cleanup:", e);
         }
         mapRef.current = null; // Nullify the ref
       }
     };
-  }, []); // Empty dependency array: cleanup runs on component unmount.
+  }, []);
 
 
   useEffect(() => {
@@ -161,6 +168,9 @@ export default function PetMapDisplay() {
                     imageUrl: org.photos?.[0]?.medium,
                     websiteUrl: org.website || org.url,
                     dataAiHint: "animal shelter",
+                    // Petfinder API (especially for organizations) often doesn't provide lat/long directly.
+                    // This would require a geocoding step if precise map placement is needed for Petfinder orgs without coordinates.
+                    // For now, we'll filter them out if they don't have coordinates.
                     latitude: undefined, 
                     longitude: undefined,
                 }));
@@ -171,7 +181,7 @@ export default function PetMapDisplay() {
         }
         
         const uniqueLocations = Array.from(new Map(combinedLocations.map(item => [item.id, item])).values())
-                                  .filter(loc => typeof loc.latitude === 'number' && typeof loc.longitude === 'number');
+                                  .filter(loc => typeof loc.latitude === 'number' && typeof loc.longitude === 'number'); // Ensure lat/lng are present
         setAllFetchedLocations(uniqueLocations);
       } catch (e: any) {
         console.error("Error fetching initial map locations:", e);
@@ -198,6 +208,7 @@ export default function PetMapDisplay() {
     } else if (!isLoading && newFilteredPlaces.length > 0) {
       setError(null);
     } else if (!isLoading && allFetchedLocations.length === 0 && activeFilters.size === filterOptions.length && !searchQuery){
+      // If everything is fetched and no initial data, don't show error (API might return empty for some terms)
       setError(null); 
     }
 
@@ -238,7 +249,7 @@ export default function PetMapDisplay() {
     }
   }, [selectedMapLocation]);
 
-  const canRenderMap = clientMounted && leafletLib && typeof leafletLib.Map === 'function' && customLeafletIcon !== null;
+  const canRenderMap = clientMounted && leafletLib && typeof leafletLib.Map === 'function' && mapIconsConfigured;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 min-h-[600px]">
@@ -295,12 +306,12 @@ export default function PetMapDisplay() {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
               {displayedLocations.map(loc => {
-                if (loc.latitude && loc.longitude && customLeafletIcon) {
+                if (loc.latitude && loc.longitude && leafletLib) { // leafletLib check ensures L is available
                   return (
                     <DynamicMarker
                       key={loc.id}
                       position={[loc.latitude, loc.longitude]}
-                      icon={customLeafletIcon}
+                      // No icon prop here, will use globally configured default
                       whenCreated={(markerInstance: L.Marker) => { markerRefs.current.set(loc.id, markerInstance); }}
                     >
                       <DynamicPopup>
@@ -332,7 +343,7 @@ export default function PetMapDisplay() {
               </p>
                {!clientMounted && <p className="text-xs text-muted-foreground mt-1">Initializing client...</p>}
                {clientMounted && !leafletLib && <p className="text-xs text-muted-foreground mt-1">Loading map library...</p>}
-               {clientMounted && leafletLib && !customLeafletIcon && <p className="text-xs text-muted-foreground mt-1">Initializing map icons...</p>}
+               {clientMounted && leafletLib && !mapIconsConfigured && <p className="text-xs text-muted-foreground mt-1">Configuring map icons...</p>}
             </div>
           )}
         </div>
@@ -385,3 +396,5 @@ export default function PetMapDisplay() {
   );
 }
 
+
+    
