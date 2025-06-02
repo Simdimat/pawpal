@@ -1,3 +1,4 @@
+
 import {NextResponse} from 'next/server';
 import type {NextRequest} from 'next/server';
 import {askPawPal, type AskPawPalInput} from '@/ai/flows/ask-pawpal';
@@ -50,13 +51,6 @@ export async function POST(request: NextRequest) {
       petfinderContext: petfinderContext || undefined,
     };
     
-    // The askPawPal flow from Genkit does not directly support streaming in the way
-    // a raw OpenAI SDK call would for `res.write`. It returns a Promise<AskPawPalOutput>.
-    // To achieve streaming, the `askPawPalFlow` itself would need to be designed for it,
-    // or we'd use the OpenAI SDK directly here with `stream: true`.
-    // For now, we'll simulate streaming by sending the full response in chunks.
-    // This is a limitation of using the pre-built AI flow as-is if it wasn't designed for SSE.
-
     const aiResult = await askPawPal(aiInput);
     const aiAnswer = aiResult.answer;
 
@@ -82,8 +76,34 @@ export async function POST(request: NextRequest) {
       headers: { 'Content-Type': 'text/plain; charset=utf-8' }, // Or text/event-stream for true SSE
     });
 
-  } catch (error) {
-    console.error('PawPal API Error:', error);
-    return NextResponse.json({error: 'Failed to get response from PawPal AI.'}, {status: 500});
+  } catch (error: any) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    console.error('--- PawPal API Error (src/app/api/chat/route.ts) ---');
+    console.error('Message:', errorMessage);
+    if (errorStack) {
+      console.error('Stack:', errorStack);
+    }
+    if (!(error instanceof Error)) {
+      console.error('Full error object:', error);
+    }
+    console.error('--- End PawPal API Error ---');
+
+    let clientErrorMessage = 'Failed to get response from PawPal AI. Please check server logs for details.';
+    const lowerErrorMessage = errorMessage.toLowerCase();
+
+    if (lowerErrorMessage.includes('api key') || 
+        lowerErrorMessage.includes('authentication') || 
+        lowerErrorMessage.includes('permission denied') || 
+        lowerErrorMessage.includes('quota') ||
+        lowerErrorMessage.includes('unauthorized')) {
+      clientErrorMessage = 'PawPal AI authentication or authorization error. Please ensure your AI service API key is correctly configured in the .env file and has necessary permissions/quota.';
+    } else if (errorMessage) {
+      // Provide a snippet of the actual error if it's not API key related
+      clientErrorMessage = `PawPal AI service error: ${errorMessage.substring(0, 200)}${errorMessage.length > 200 ? '...' : ''}. Check server logs.`;
+    }
+    
+    return NextResponse.json({error: clientErrorMessage}, {status: 500});
   }
 }
