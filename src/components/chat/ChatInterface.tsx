@@ -233,7 +233,7 @@ const ChatInterface = () => {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask PawPal..."
-          className="flex-grow focus-visible:ring-primary"
+          className="flex-grow focus-visible:ring-primary bg-card"
           disabled={isLoading}
           aria-label="Chat input"
         />
