@@ -12,12 +12,13 @@ import VetListings from '@/components/vets/VetListings';
 import ShelterListings from '@/components/shelters/ShelterListings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+// features array is no longer used for rendering this section but might be used elsewhere or for reference.
 const features = [
   {
     icon: Map,
     title: 'Pet Map SD',
     description: 'Discover dog-friendly parks, beaches, vets, and more on our interactive map.',
-    link: '/#map-section', // Updated link
+    link: '/#map-section',
     color: 'text-orange-500',
     dataAiHint: 'map navigation',
   },
@@ -25,7 +26,7 @@ const features = [
     icon: AlertTriangle,
     title: 'Emergency Guide',
     description: 'Quick access to information for common pet emergencies.',
-    link: '/#emergency-section', // Updated link
+    link: '/#emergency-section',
     color: 'text-red-500',
     dataAiHint: 'emergency firstaid',
   },
@@ -33,7 +34,7 @@ const features = [
     icon: Hospital,
     title: 'Vet Info Hub',
     description: 'Find local veterinarians and info about TJ vet options.',
-    link: '/#vets-section', // Updated link
+    link: '/#vets-section',
     color: 'text-green-500',
     dataAiHint: 'veterinary clinic',
   },
@@ -41,7 +42,7 @@ const features = [
     icon: Dog,
     title: 'Dog Day Out & Volunteer',
     description: 'Connect with shelters for volunteer opportunities and "dog for a day" programs.',
-    link: '/#dog-day-out-section', // Updated link
+    link: '/#dog-day-out-section',
     color: 'text-purple-500',
     dataAiHint: 'dog walking',
   },
@@ -69,30 +70,7 @@ export default function HomePage() {
             <h2 className="text-3xl font-headline font-bold tracking-tight text-center text-foreground mb-12">
               Explore PawPal SD Features
             </h2>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              {features.map((feature) => (
-                <Card key={feature.title} className="hover:shadow-xl transition-shadow duration-300 flex flex-col">
-                  <CardHeader className="flex flex-row items-center gap-4 pb-2">
-                    <feature.icon className={`w-10 h-10 ${feature.color}`} />
-                    <CardTitle className="font-headline text-xl text-foreground">{feature.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex-grow flex flex-col">
-                    <CardDescription className="text-foreground/70 mb-4 flex-grow">{feature.description}</CardDescription>
-                    <Image
-                      src={`https://placehold.co/600x400.png`}
-                      alt={feature.title}
-                      width={600}
-                      height={400}
-                      className="rounded-md object-cover aspect-video mb-4"
-                      data-ai-hint={feature.dataAiHint}
-                    />
-                    <Button asChild variant="outline" className="w-full border-primary text-primary hover:bg-primary/10 hover:text-primary">
-                      <Link href={feature.link}>Go to Section</Link>
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            {/* The grid of feature cards has been removed from here */}
           </div>
         </section>
 
