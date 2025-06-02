@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
-// Removed: import L from 'leaflet';
+// L is imported dynamically in useEffect
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Filter, Search, Loader2, AlertTriangle } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { Map as LeafletMap } from 'leaflet'; // Renamed to avoid conflict if L is imported
+import type { Map as LeafletMap } from 'leaflet';
 
 interface Place {
   id: string;
@@ -40,40 +40,24 @@ const filterOptions = [
   { id: 'restaurants', label: 'Pet-Friendly Restaurants', type: 'restaurant' },
 ] as const;
 
-// Dynamically import react-leaflet components
-const DynamicMapContainer = dynamic(() =>
-  import('react-leaflet').then((mod) => mod.MapContainer),
-  { ssr: false }
-);
-const DynamicTileLayer = dynamic(() =>
-  import('react-leaflet').then((mod) => mod.TileLayer),
-  { ssr: false }
-);
-const DynamicMarker = dynamic(() =>
-  import('react-leaflet').then((mod) => mod.Marker),
-  { ssr: false }
-);
-const DynamicPopup = dynamic(() =>
-  import('react-leaflet').then((mod) => mod.Popup),
-  { ssr: false }
-);
-const useMap = dynamic(() => // This is a hook, should be capitalized if it's a component
-  import('react-leaflet').then((mod) => mod.useMap),
-  { ssr: false }
-);
-
+const DynamicMapContainer = dynamic(() => import('react-leaflet').then((mod) => mod.MapContainer), { ssr: false });
+const DynamicTileLayer = dynamic(() => import('react-leaflet').then((mod) => mod.TileLayer), { ssr: false });
+const DynamicMarker = dynamic(() => import('react-leaflet').then((mod) => mod.Marker), { ssr: false });
+const DynamicPopup = dynamic(() => import('react-leaflet').then((mod) => mod.Popup), { ssr: false });
+const useMap = dynamic(() => import('react-leaflet').then((mod) => mod.useMap), { ssr: false });
 
 const RecenterAutomatically = ({lat, lng, zoom} : {lat: number, lng: number, zoom: number}) => {
-  const mapHook = useMap ? useMap() : null; 
+  const mapHook = useMap ? useMap() : null;
    useEffect(() => {
      if (mapHook) {
        mapHook.setView([lat, lng], zoom);
      }
    }, [lat, lng, zoom, mapHook]);
    return null;
- }
+}
 
 const PetMapDisplay = () => {
+  const [clientMounted, setClientMounted] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [places, setPlaces] = useState<Place[]>(initialPlaces);
   const [filteredPlaces, setFilteredPlaces] = useState<Place[]>(initialPlaces);
@@ -81,18 +65,20 @@ const PetMapDisplay = () => {
   const [activeFilters, setActiveFilters] = useState<Set<Place['type']>>(
     new Set(filterOptions.map(f => f.type))
   );
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // For data fetching
   const [error, setError] = useState<string | null>(null);
-  const [mapCenter, setMapCenter] = useState<[number, number]>([32.7157, -117.1611]); // San Diego default
+  const [mapCenter, setMapCenter] = useState<[number, number]>([32.7157, -117.1611]);
   const [mapZoom, setMapZoom] = useState(11);
-  
+
+  useEffect(() => {
+    setClientMounted(true);
+  }, []);
+
   useEffect(() => {
     const setupMapEnvironment = async () => {
-      if (typeof window !== 'undefined') { // Ensure this runs client-side
+      if (typeof window !== 'undefined') {
         try {
           const L = (await import('leaflet')).default;
-
-          // Fix for default Leaflet icon issue with Webpack
           if (L && L.Icon && L.Icon.Default) {
               delete (L.Icon.Default.prototype as any)._getIconUrl;
               L.Icon.Default.mergeOptions({
@@ -107,34 +93,34 @@ const PetMapDisplay = () => {
           console.error("Error fixing Leaflet icons:", e);
         }
       }
-      setMapReady(true); // Set map ready after attempting icon fix
+      setMapReady(true);
     };
 
-    setupMapEnvironment();
-  }, []); // Empty dependency array: runs once on mount
+    if (clientMounted) {
+      setupMapEnvironment();
+    }
+  }, [clientMounted]);
 
   const fetchPlaces = async (filters: Set<Place['type']>, query?: string) => {
     setLoading(true);
     setError(null);
-    // Simulate API Call
-    await new Promise(resolve => setTimeout(resolve, 1000)); 
+    await new Promise(resolve => setTimeout(resolve, 1000));
     try {
       let newFilteredPlaces = initialPlaces.filter(p => filters.has(p.type));
       if (query) {
-        newFilteredPlaces = newFilteredPlaces.filter(p => 
+        newFilteredPlaces = newFilteredPlaces.filter(p =>
           p.name.toLowerCase().includes(query.toLowerCase()) ||
           (p.address && p.address.toLowerCase().includes(query.toLowerCase()))
         );
       }
       setFilteredPlaces(newFilteredPlaces);
 
-      if (newFilteredPlaces.length > 0 && query) { 
+      if (newFilteredPlaces.length > 0 && query) {
         setMapCenter([newFilteredPlaces[0].latitude, newFilteredPlaces[0].longitude]);
         setMapZoom(13);
       } else if (newFilteredPlaces.length === 0 && query) {
         setError("No results found for your search.");
       }
-
     } catch (e) {
       setError('Failed to load places. Please try again.');
       console.error(e);
@@ -143,12 +129,10 @@ const PetMapDisplay = () => {
   };
 
   useEffect(() => {
-    // Initial fetch and re-fetch on filter/search query change
-    // Only fetch if map is ready to avoid issues if fetch completes before map setup
-    if (mapReady) {
+    if (clientMounted && mapReady) {
         fetchPlaces(activeFilters, searchQuery);
     }
-  }, [activeFilters, searchQuery, mapReady]);
+  }, [activeFilters, searchQuery, clientMounted, mapReady]);
 
   const handleFilterChange = (type: Place['type'], checked: boolean) => {
     setActiveFilters(prev => {
@@ -164,16 +148,12 @@ const PetMapDisplay = () => {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    // fetchPlaces is now called by the useEffect watching searchQuery and activeFilters
-    // Triggering it here explicitly is fine too, or rely on state change to trigger useEffect
-    if (mapReady) {
+    if (clientMounted && mapReady) {
         fetchPlaces(activeFilters, searchQuery);
     }
   };
-  
-  if (!mapReady || !DynamicMapContainer || !DynamicTileLayer || !DynamicMarker || !DynamicPopup || !useMap ) {
-    return <div className="flex justify-center items-center h-[600px]"><Loader2 className="h-12 w-12 animate-spin text-primary" /> <p className="ml-2">Loading Map...</p></div>;
-  }
+
+  const canRenderMap = clientMounted && mapReady && DynamicMapContainer && DynamicTileLayer && DynamicMarker && DynamicPopup && useMap;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-200px)] min-h-[600px]">
@@ -184,7 +164,7 @@ const PetMapDisplay = () => {
         <CardContent className="flex-grow flex flex-col">
           <form onSubmit={handleSearch} className="space-y-4 mb-4">
             <div className="relative">
-              <Input 
+              <Input
                 placeholder="Search by name or address..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -200,8 +180,8 @@ const PetMapDisplay = () => {
             <div className="space-y-2">
             {filterOptions.map(opt => (
               <div key={opt.id} className="flex items-center space-x-2">
-                <Checkbox 
-                  id={opt.id} 
+                <Checkbox
+                  id={opt.id}
                   checked={activeFilters.has(opt.type)}
                   onCheckedChange={(checked) => handleFilterChange(opt.type, !!checked)}
                 />
@@ -216,32 +196,38 @@ const PetMapDisplay = () => {
       </Card>
 
       <div className="md:col-span-2 h-full min-h-[400px] rounded-lg overflow-hidden shadow-lg border">
-        <DynamicMapContainer 
-            center={mapCenter} 
-            zoom={mapZoom} 
-            scrollWheelZoom={true} 
-            style={{ height: '100%', width: '100%' }}
-        >
-          <RecenterAutomatically lat={mapCenter[0]} lng={mapCenter[1]} zoom={mapZoom} />
-          <DynamicTileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          {filteredPlaces.map(place => (
-            <DynamicMarker key={place.id} position={[place.latitude, place.longitude]}>
-              <DynamicPopup>
-                <h3 className="font-bold text-md mb-1">{place.name}</h3>
-                {place.address && <p className="text-xs mb-1">{place.address}</p>}
-                <p className="text-xs capitalize mb-1">Type: {place.type}</p>
-                {place.rating && <p className="text-xs">Rating: {place.rating}/5</p>}
-              </DynamicPopup>
-            </DynamicMarker>
-          ))}
-        </DynamicMapContainer>
+        {canRenderMap ? (
+          <DynamicMapContainer
+              center={mapCenter}
+              zoom={mapZoom}
+              scrollWheelZoom={true}
+              style={{ height: '100%', width: '100%' }}
+          >
+            <RecenterAutomatically lat={mapCenter[0]} lng={mapCenter[1]} zoom={mapZoom} />
+            <DynamicTileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            {filteredPlaces.map(place => (
+              <DynamicMarker key={place.id} position={[place.latitude, place.longitude]}>
+                <DynamicPopup>
+                  <h3 className="font-bold text-md mb-1">{place.name}</h3>
+                  {place.address && <p className="text-xs mb-1">{place.address}</p>}
+                  <p className="text-xs capitalize mb-1">Type: {place.type}</p>
+                  {place.rating && <p className="text-xs">Rating: {place.rating}/5</p>}
+                </DynamicPopup>
+              </DynamicMarker>
+            ))}
+          </DynamicMapContainer>
+        ) : (
+          <div className="flex justify-center items-center h-full">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <p className="ml-2">Loading Map...</p>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 export default PetMapDisplay;
-
