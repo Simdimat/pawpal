@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Filter, Search, Loader2, AlertTriangle } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import type { Map } from 'leaflet'; // Import Map type for useMap hook
 
 // Fix for default Leaflet icon issue with Webpack
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -47,11 +48,35 @@ const filterOptions = [
   { id: 'restaurants', label: 'Pet-Friendly Restaurants', type: 'restaurant' },
 ] as const;
 
+// Dynamically import react-leaflet components
+const DynamicMapContainer = dynamic(() =>
+  import('react-leaflet').then((mod) => mod.MapContainer),
+  { ssr: false }
+);
+const DynamicTileLayer = dynamic(() =>
+  import('react-leaflet').then((mod) => mod.TileLayer),
+  { ssr: false }
+);
+const DynamicMarker = dynamic(() =>
+  import('react-leaflet').then((mod) => mod.Marker),
+  { ssr: false }
+);
+const DynamicPopup = dynamic(() =>
+  import('react-leaflet').then((mod) => mod.Popup),
+  { ssr: false }
+);
+const useMap = dynamic(() =>
+  import('react-leaflet').then((mod) => mod.useMap),
+  { ssr: false }
+);
+
 
 const RecenterAutomatically = ({lat, lng, zoom} : {lat: number, lng: number, zoom: number}) => {
-  const map = useMap();
+  const map = useMap ? useMap() : null; // useMap could be null before dynamic import resolves
    useEffect(() => {
-     map.setView([lat, lng], zoom);
+     if (map) {
+       map.setView([lat, lng], zoom);
+     }
    }, [lat, lng, zoom, map]);
    return null;
  }
@@ -69,23 +94,15 @@ const PetMapDisplay = () => {
   const [mapCenter, setMapCenter] = useState<[number, number]>([32.7157, -117.1611]); // San Diego default
   const [mapZoom, setMapZoom] = useState(11);
   
-  // const mapRef = useRef<L.Map | null>(null); // Removed as it's not used in the current component logic
-
   useEffect(() => {
-    setMapReady(true); // Map is ready once component mounts on client
+    setMapReady(true); 
   }, []);
 
-  // Fetch places from API (mocked for now)
   const fetchPlaces = async (filters: Set<Place['type']>, query?: string) => {
     setLoading(true);
     setError(null);
-    // console.log('Fetching places with filters:', Array.from(filters), 'and query:', query);
-    // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000));
     try {
-      // In real app: const response = await fetch(`/api/map/places?filters=${Array.from(filters).join(',')}&query=${query}`);
-      // const data = await response.json(); setPlaces(data);
-      
       let newFilteredPlaces = initialPlaces.filter(p => filters.has(p.type));
       if (query) {
         newFilteredPlaces = newFilteredPlaces.filter(p => 
@@ -95,7 +112,7 @@ const PetMapDisplay = () => {
       }
       setFilteredPlaces(newFilteredPlaces);
 
-      if (newFilteredPlaces.length > 0 && query) { // Recenter on search if results found
+      if (newFilteredPlaces.length > 0 && query) { 
         setMapCenter([newFilteredPlaces[0].latitude, newFilteredPlaces[0].longitude]);
         setMapZoom(13);
       } else if (newFilteredPlaces.length === 0 && query) {
@@ -130,7 +147,7 @@ const PetMapDisplay = () => {
     fetchPlaces(activeFilters, searchQuery);
   };
 
-  if (!mapReady) {
+  if (!mapReady || !useMap) { // Ensure useMap hook is also loaded
     return <div className="flex justify-center items-center h-[600px]"><Loader2 className="h-12 w-12 animate-spin text-primary" /> <p className="ml-2">Loading Map...</p></div>;
   }
 
@@ -155,7 +172,7 @@ const PetMapDisplay = () => {
             </div>
           </form>
           <Label className="font-semibold mb-2 block">Categories:</Label>
-          <ScrollArea className="flex-grow pr-3"> {/* Added pr-3 for scrollbar space */}
+          <ScrollArea className="flex-grow pr-3">
             <div className="space-y-2">
             {filterOptions.map(opt => (
               <div key={opt.id} className="flex items-center space-x-2">
@@ -175,29 +192,28 @@ const PetMapDisplay = () => {
       </Card>
 
       <div className="md:col-span-2 h-full min-h-[400px] rounded-lg overflow-hidden shadow-lg border">
-        <MapContainer 
+        <DynamicMapContainer 
             center={mapCenter} 
             zoom={mapZoom} 
             scrollWheelZoom={true} 
             style={{ height: '100%', width: '100%' }}
-            // whenCreated prop removed as mapRef is not used
         >
           <RecenterAutomatically lat={mapCenter[0]} lng={mapCenter[1]} zoom={mapZoom} />
-          <TileLayer
+          <DynamicTileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           {filteredPlaces.map(place => (
-            <Marker key={place.id} position={[place.latitude, place.longitude]}>
-              <Popup>
+            <DynamicMarker key={place.id} position={[place.latitude, place.longitude]}>
+              <DynamicPopup>
                 <h3 className="font-bold text-md mb-1">{place.name}</h3>
                 {place.address && <p className="text-xs mb-1">{place.address}</p>}
                 <p className="text-xs capitalize mb-1">Type: {place.type}</p>
                 {place.rating && <p className="text-xs">Rating: {place.rating}/5</p>}
-              </Popup>
-            </Marker>
+              </DynamicPopup>
+            </DynamicMarker>
           ))}
-        </MapContainer>
+        </DynamicMapContainer>
       </div>
     </div>
   );
