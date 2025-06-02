@@ -6,14 +6,14 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Home, MessageSquare, Map, AlertTriangle, HospitalIcon, Users } from 'lucide-react'; // Added more icons
+import { Menu, Home, MessageSquare, Map, AlertTriangle, HospitalIcon, Dog, Users } from 'lucide-react'; // Added Dog icon
 
 const navItems = [
   { href: '/', label: 'Home', icon: Home },
   { href: '/#map-section', label: 'Pet Map', icon: Map },
   { href: '/#emergency-section', label: 'Emergency', icon: AlertTriangle },
   { href: '/#vets-section', label: 'Vets Info', icon: HospitalIcon },
-  { href: '/#dog-day-out-section', label: 'Dog Day Out', icon: Users },
+  { href: '/#dog-day-out-section', label: 'Dog Day Out', icon: Dog }, // Changed from Users to Dog
   // Chat is now a sidebar on home, so direct nav link might be less crucial.
   // Could add a link to scroll to chat: { href: '/#chat-sidebar', label: 'Ask PawPal', icon: MessageSquare }
 ];
@@ -76,4 +76,3 @@ const NavMenu = () => {
 };
 
 export default NavMenu;
-
