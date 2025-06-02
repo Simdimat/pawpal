@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
-import type { Map as LeafletMap } from 'leaflet'; // For map instance type
+import type { Map as LeafletMap } from 'leaflet';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -33,12 +33,13 @@ const initialPlaces: Place[] = [
 ];
 
 const filterOptions = [
-  { id: 'parks', label: 'Dog Parks', type: 'park' },
-  { id: 'beaches', label: 'Dog Beaches', type: 'beach' },
-  { id: 'vets', label: 'Vets', type: 'vet' },
-  { id: 'shelters', label: 'Shelters', type: 'shelter' },
-  { id: 'restaurants', label: 'Pet-Friendly Restaurants', type: 'restaurant' },
+  { id: 'parks', label: 'Dog Parks', type: 'park' as Place['type'] },
+  { id: 'beaches', label: 'Dog Beaches', type: 'beach' as Place['type'] },
+  { id: 'vets', label: 'Vets', type: 'vet' as Place['type'] },
+  { id: 'shelters', label: 'Shelters', type: 'shelter' as Place['type'] },
+  { id: 'restaurants', label: 'Pet-Friendly Restaurants', type: 'restaurant' as Place['type'] },
 ] as const;
+
 
 const DynamicMapContainer = dynamic(() => import('react-leaflet').then((mod) => mod.MapContainer), { ssr: false });
 const DynamicTileLayer = dynamic(() => import('react-leaflet').then((mod) => mod.TileLayer), { ssr: false });
@@ -72,14 +73,13 @@ const PetMapDisplay = () => {
   const [mapZoom, setMapZoom] = useState(11);
   const mapInstanceRef = useRef<LeafletMap | null>(null);
 
-
   useEffect(() => {
     setClientMounted(true);
   }, []);
 
   useEffect(() => {
-    const setupMapEnvironment = async () => {
-      if (clientMounted && typeof window !== 'undefined') {
+    if (clientMounted) {
+      const setupLeafletIcons = async () => {
         try {
           const L = (await import('leaflet')).default;
           if (L && L.Icon && L.Icon.Default) {
@@ -96,27 +96,27 @@ const PetMapDisplay = () => {
           console.error("Error fixing Leaflet icons:", e);
         }
         setMapReady(true);
-      }
-    };
-
-    setupMapEnvironment();
+      };
+      setupLeafletIcons();
+    }
   }, [clientMounted]);
 
-  // Effect for explicit map cleanup
   useEffect(() => {
+    // Capture the current map instance when the effect sets up.
+    const mapToRemove = mapInstanceRef.current;
     return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
+      // Use the captured instance for cleanup when the component unmounts.
+      if (mapToRemove) {
+        mapToRemove.remove();
       }
     };
-  }, []);
+  }, []); // Empty dependency array: effect runs once on mount, cleanup on unmount.
 
 
   const fetchPlaces = async (filters: Set<Place['type']>, query?: string) => {
     setLoading(true);
     setError(null);
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
     try {
       let newFilteredPlaces = initialPlaces.filter(p => filters.has(p.type));
       if (query) {
@@ -144,6 +144,7 @@ const PetMapDisplay = () => {
     if (clientMounted && mapReady) {
         fetchPlaces(activeFilters, searchQuery);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilters, searchQuery, clientMounted, mapReady]);
 
   const handleFilterChange = (type: Place['type'], checked: boolean) => {
@@ -165,7 +166,7 @@ const PetMapDisplay = () => {
     }
   };
 
-  const canRenderMap = clientMounted && mapReady && DynamicMapContainer && DynamicTileLayer && DynamicMarker && DynamicPopup && useMap;
+  const canRenderMap = clientMounted && mapReady;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-200px)] min-h-[600px]">
@@ -214,7 +215,7 @@ const PetMapDisplay = () => {
               zoom={mapZoom}
               scrollWheelZoom={true}
               style={{ height: '100%', width: '100%' }}
-              whenCreated={(map: LeafletMap) => { // Added type here for clarity
+              whenCreated={(map: LeafletMap) => {
                 mapInstanceRef.current = map;
               }}
           >
