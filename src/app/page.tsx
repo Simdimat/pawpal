@@ -1,8 +1,11 @@
 
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { MessageCircle, Map, AlertTriangle, Hospital, Dog } from 'lucide-react';
+import { MessageCircle, Map, AlertTriangle, Hospital, Dog, XIcon, ChevronDown } from 'lucide-react';
 import Image from 'next/image';
 
 import ChatInterface from '@/components/chat/ChatInterface';
@@ -11,48 +14,15 @@ import EmergencyFlows from '@/components/emergency/EmergencyFlows';
 import VetListings from '@/components/vets/VetListings';
 import ShelterListings from '@/components/shelters/ShelterListings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-// features array is no longer used for rendering this section but might be used elsewhere or for reference.
-const features = [
-  {
-    icon: Map,
-    title: 'Pet Map SD',
-    description: 'Discover dog-friendly parks, beaches, vets, and more on our interactive map.',
-    link: '/#map-section',
-    color: 'text-orange-500',
-    dataAiHint: 'map navigation',
-  },
-  {
-    icon: AlertTriangle,
-    title: 'Emergency Guide',
-    description: 'Quick access to information for common pet emergencies.',
-    link: '/#emergency-section',
-    color: 'text-red-500',
-    dataAiHint: 'emergency firstaid',
-  },
-  {
-    icon: Hospital,
-    title: 'Vet Info Hub',
-    description: 'Find local veterinarians and info about TJ vet options.',
-    link: '/#vets-section',
-    color: 'text-green-500',
-    dataAiHint: 'veterinary clinic',
-  },
-  {
-    icon: Dog,
-    title: 'Dog Day Out & Volunteer',
-    description: 'Connect with shelters for volunteer opportunities and "dog for a day" programs.',
-    link: '/#dog-day-out-section',
-    color: 'text-purple-500',
-    dataAiHint: 'dog walking',
-  },
-];
+import { cn } from '@/lib/utils';
 
 export default function HomePage() {
+  const [isChatOpen, setIsChatOpen] = useState(true);
+
   return (
-    <div className="flex flex-col lg:flex-row gap-8">
-      {/* Main Content Area */}
-      <main className="flex-grow lg:w-2/3 space-y-12">
+    <div className="flex flex-col gap-8">
+      {/* Main Content Area - takes full width now */}
+      <main className="w-full space-y-12">
         <section className="w-full py-12 md:py-20 lg:py-24 bg-gradient-to-br from-primary/10 via-background to-accent/10 rounded-xl shadow-lg">
           <div className="container px-4 md:px-6 text-center">
             <h1 className="text-4xl font-headline font-bold tracking-tight sm:text-5xl md:text-6xl text-foreground">
@@ -61,7 +31,6 @@ export default function HomePage() {
             <p className="mt-4 max-w-2xl mx-auto text-lg text-foreground/80 md:text-xl">
               Your AI-powered companion for navigating pet life in San Diego. Find everything you need, from vets and parks to emergency advice, all in one place.
             </p>
-            {/* Removed "Ask PawPal Now" button as chat is in sidebar */}
           </div>
         </section>
 
@@ -70,7 +39,7 @@ export default function HomePage() {
             <h2 className="text-3xl font-headline font-bold tracking-tight text-center text-foreground mb-12">
               Explore PawPal SD Features
             </h2>
-            {/* The grid of feature cards has been removed from here */}
+            {/* Feature cards were previously removed here, keeping title as per user request */}
           </div>
         </section>
 
@@ -144,21 +113,40 @@ export default function HomePage() {
         </section>
       </main>
 
-      {/* Chat Sidebar */}
-      <aside className="w-full lg:w-[450px] xl:w-1/3 lg:sticky lg:top-20 self-start h-auto lg:h-[calc(100vh-6rem)] mt-12 lg:mt-0">
-        <Card className="w-full shadow-xl h-full flex flex-col overflow-hidden">
-          <CardHeader className="text-center border-b">
-            <div className="flex items-center justify-center gap-2">
-              <MessageCircle className="w-8 h-8 text-primary" />
-              <CardTitle className="text-2xl font-headline text-primary">Ask PawPal AI</CardTitle>
-            </div>
-            <CardDescription className="text-foreground/80 text-sm mt-1">
-              Your friendly AI assistant for San Diego pet questions.
-            </CardDescription>
-          </CardHeader>
-          <ChatInterface />
-        </Card>
-      </aside>
+      {/* Collapsible Chat Area */}
+      {isChatOpen ? (
+        <div className="fixed bottom-0 right-0 sm:bottom-4 sm:right-4 z-50 w-full sm:w-[400px] md:w-[450px]">
+          <Card className="w-full h-[60vh] sm:h-[70vh] max-h-[700px] shadow-xl flex flex-col overflow-hidden border border-border rounded-t-lg sm:rounded-lg">
+            <CardHeader className="text-center border-b relative py-4">
+              <div className="flex items-center justify-center gap-2">
+                <MessageCircle className="w-6 h-6 text-primary" />
+                <CardTitle className="text-lg font-headline text-primary">Ask PawPal AI</CardTitle>
+              </div>
+              <CardDescription className="text-foreground/80 text-xs mt-0.5">
+                Your AI assistant for pet questions.
+              </CardDescription>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-1/2 -translate-y-1/2 right-2 text-muted-foreground hover:text-foreground w-8 h-8"
+                onClick={() => setIsChatOpen(false)}
+                aria-label="Minimize chat"
+              >
+                <ChevronDown className="h-5 w-5" />
+              </Button>
+            </CardHeader>
+            <ChatInterface />
+          </Card>
+        </div>
+      ) : (
+        <Button
+          className="fixed bottom-4 right-4 z-50 rounded-full w-16 h-16 p-0 shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground flex items-center justify-center"
+          onClick={() => setIsChatOpen(true)}
+          aria-label="Open chat"
+        >
+          <MessageCircle className="w-8 h-8" />
+        </Button>
+      )}
     </div>
   );
 }
