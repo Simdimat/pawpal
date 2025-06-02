@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useEffect, FormEvent } from 'react';
@@ -8,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Send, User, Bot, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import FeedbackModal from '../FeedbackModal'; // Ensure this component is created
+import FeedbackModal from '../FeedbackModal'; 
 
 interface Message {
   id: string;
@@ -30,16 +31,14 @@ const ChatInterface = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Auto-scroll to bottom
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
   }, [messages]);
 
   useEffect(() => {
-    // Generate a session ID when component mounts or when a new chat logically starts
     setCurrentSessionId(`session_${Date.now()}_${Math.random().toString(36).substring(7)}`);
-    setAiResponseCountInSession(0); // Reset for new session
+    setAiResponseCountInSession(0);
   }, []);
 
 
@@ -67,7 +66,6 @@ const ChatInterface = () => {
           question: userMessage.text,
           user_identifier: userIdentifier,
           session_id: currentSessionId,
-          // conversation_history: messages, // Could send history for context
          }),
       });
 
@@ -75,13 +73,11 @@ const ChatInterface = () => {
         throw new Error(`API error: ${response.statusText}`);
       }
       
-      // Handle streaming response
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let aiResponseText = '';
       const aiMessageId = `ai_${Date.now()}`;
 
-      // Add a placeholder for AI message
       setMessages((prev) => [...prev, { id: aiMessageId, text: '', sender: 'ai', timestamp: new Date() }]);
 
       while (true) {
@@ -96,16 +92,10 @@ const ChatInterface = () => {
         );
       }
       
-      // Final AI message update is implicitly done by the loop.
-      // Now handle post-AI response logic
       const newAiResponseCount = aiResponseCountInSession + 1;
       setAiResponseCountInSession(newAiResponseCount);
 
-      // Trigger feedback modal after the second AI response in the session
-      // Note: This logic assumes session_id is stable for a "conversation topic"
-      // And feedback_prompted_for_session would be checked/set on backend
       if (newAiResponseCount === 2 && currentSessionId) {
-         // In a real app, you might check a backend flag if feedback was already prompted for this session
         setFeedbackSessionId(currentSessionId);
         setShowFeedbackModal(true);
       }
@@ -117,17 +107,14 @@ const ChatInterface = () => {
         description: 'Could not get response from PawPal. Please try again.',
         variant: 'destructive',
       });
-      // Remove placeholder AI message on error or add error message
-      setMessages((prev) => prev.filter(msg => msg.id !== `ai_${Date.now()}`)); // This ID might mismatch
+      setMessages((prevMessages) => prevMessages.filter(msg => msg.id !== `ai_${Date.now()}`)); // Ensure correct ID for removal
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleFeedbackSubmit = async (feedbackText: string) => {
+  const handleFeedbackSubmit = async (feedbackText: string, helpful?: boolean) => {
     if (!feedbackSessionId) return;
-    // console.log('Feedback submitted for session:', feedbackSessionId, 'Feedback:', feedbackText);
-    // API call to /api/user/feedback
     const userIdentifier = localStorage.getItem('pawpal_user_email') || sessionStorage.getItem('pawpal_browser_id') || 'anonymous_user';
     try {
       await fetch('/api/user/feedback', {
@@ -137,6 +124,7 @@ const ChatInterface = () => {
           user_identifier: userIdentifier,
           session_id: feedbackSessionId,
           feedback_text: feedbackText,
+          helpful: helpful,
         }),
       });
       toast({ title: 'Feedback Submitted', description: 'Thank you for your feedback!' });
@@ -145,13 +133,12 @@ const ChatInterface = () => {
     }
     setShowFeedbackModal(false);
     setFeedbackSessionId(null);
-     // Potentially mark session as feedback given to prevent re-prompting
   };
 
 
   return (
-    <>
-      <ScrollArea className="h-[50vh] w-full p-4 border-t border-b" ref={scrollAreaRef}>
+    <div className="flex flex-col h-full w-full"> {/* Wrapper for flex layout */}
+      <ScrollArea className="flex-grow w-full p-4" ref={scrollAreaRef}> {/* Changed: flex-grow, removed border-t/b */}
         <div className="space-y-4">
           {messages.map((message) => (
             <div
@@ -176,7 +163,7 @@ const ChatInterface = () => {
                 )}
               >
                 {message.text || (message.sender === 'ai' && <Loader2 className="h-4 w-4 animate-spin" />)}
-                 <p className="text-xs opacity-70 mt-1">
+                 <p className="text-xs opacity-70 mt-1 text-right">
                     {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </p>
               </div>
@@ -201,11 +188,11 @@ const ChatInterface = () => {
           )}
         </div>
       </ScrollArea>
-      <form onSubmit={handleSendMessage} className="p-4 flex items-center gap-2 border-t bg-background sticky bottom-0">
+      <form onSubmit={handleSendMessage} className="p-4 flex items-center gap-2 border-t bg-background"> {/* Changed: removed sticky bottom-0 */}
         <Input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask PawPal anything about pets in San Diego..."
+          placeholder="Ask PawPal..."
           className="flex-grow focus-visible:ring-primary"
           disabled={isLoading}
           aria-label="Chat input"
@@ -226,8 +213,9 @@ const ChatInterface = () => {
           sessionId={feedbackSessionId}
         />
       )}
-    </>
+    </div>
   );
 };
 
 export default ChatInterface;
+

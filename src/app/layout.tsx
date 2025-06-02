@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
@@ -17,7 +18,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning style={{ scrollBehavior: 'smooth' }}> {/* Added scroll-behavior */}
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -27,9 +28,10 @@ export default function RootLayout({
       <body className="font-body antialiased min-h-screen flex flex-col">
         <Providers>
           <Header />
-          <main className="flex-grow container mx-auto px-4 py-8">
+          {/* The main tag in page.tsx will now handle the flex-grow for its content area */}
+          <div className="flex-grow container mx-auto px-4 py-8">
             {children}
-          </main>
+          </div>
           <Footer />
           <Toaster />
         </Providers>
@@ -37,3 +39,4 @@ export default function RootLayout({
     </html>
   );
 }
+
