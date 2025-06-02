@@ -115,8 +115,8 @@ export default function HomePage() {
 
       {/* Collapsible Chat Area */}
       {isChatOpen ? (
-        <div className="fixed bottom-0 left-0 right-0 sm:bottom-4 sm:left-4 sm:right-4 z-50">
-          <Card className="w-full h-[60vh] sm:h-[70vh] max-h-[700px] shadow-xl flex flex-col overflow-hidden border border-border rounded-t-lg sm:rounded-lg">
+        <div className="fixed bottom-0 left-0 right-0 sm:bottom-4 sm:left-4 sm:right-4 z-[70]">
+          <Card className="w-full h-[45vh] sm:h-[50vh] max-h-[500px] shadow-xl flex flex-col overflow-hidden border border-border rounded-t-lg sm:rounded-lg">
             <CardHeader className="text-center border-b relative py-4">
               <div className="flex items-center justify-center gap-2">
                 <MessageCircle className="w-6 h-6 text-primary" />
