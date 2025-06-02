@@ -22,7 +22,7 @@ export default function HomePage() {
   return (
     <div className="flex flex-col gap-8">
       {/* Main Content Area - takes full width now */}
-      <main className="w-full space-y-12">
+      <main className="w-full space-y-12 relative">
         <section className="w-full py-12 md:py-20 lg:py-24 bg-gradient-to-br from-primary/10 via-background to-accent/10 rounded-xl shadow-lg">
           <div className="container px-4 md:px-6 text-center">
             <h1 className="text-4xl font-headline font-bold tracking-tight sm:text-5xl md:text-6xl text-foreground">

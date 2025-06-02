@@ -182,7 +182,7 @@ const ChatInterface = () => {
 
   return (
     <div className="flex flex-col h-full w-full">
-      <ScrollArea className="flex-grow w-full p-4" ref={scrollAreaRef}>
+      <ScrollArea className="flex-grow w-full p-4 min-h-0" ref={scrollAreaRef}>
         <div className="space-y-4">
           {messages.map((message) => (
             <div
