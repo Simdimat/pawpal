@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
+// Removed: import L from 'leaflet';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -12,15 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Filter, Search, Loader2, AlertTriangle } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { Map } from 'leaflet'; // Import Map type for useMap hook
-
-// Fix for default Leaflet icon issue with Webpack
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
+import type { Map as LeafletMap } from 'leaflet'; // Renamed to avoid conflict if L is imported
 
 interface Place {
   id: string;
@@ -65,19 +57,19 @@ const DynamicPopup = dynamic(() =>
   import('react-leaflet').then((mod) => mod.Popup),
   { ssr: false }
 );
-const useMap = dynamic(() =>
+const useMap = dynamic(() => // This is a hook, should be capitalized if it's a component
   import('react-leaflet').then((mod) => mod.useMap),
   { ssr: false }
 );
 
 
 const RecenterAutomatically = ({lat, lng, zoom} : {lat: number, lng: number, zoom: number}) => {
-  const map = useMap ? useMap() : null; // useMap could be null before dynamic import resolves
+  const mapHook = useMap ? useMap() : null; 
    useEffect(() => {
-     if (map) {
-       map.setView([lat, lng], zoom);
+     if (mapHook) {
+       mapHook.setView([lat, lng], zoom);
      }
-   }, [lat, lng, zoom, map]);
+   }, [lat, lng, zoom, mapHook]);
    return null;
  }
 
@@ -95,13 +87,37 @@ const PetMapDisplay = () => {
   const [mapZoom, setMapZoom] = useState(11);
   
   useEffect(() => {
-    setMapReady(true); 
-  }, []);
+    const setupMapEnvironment = async () => {
+      if (typeof window !== 'undefined') { // Ensure this runs client-side
+        try {
+          const L = (await import('leaflet')).default;
+
+          // Fix for default Leaflet icon issue with Webpack
+          if (L && L.Icon && L.Icon.Default) {
+              delete (L.Icon.Default.prototype as any)._getIconUrl;
+              L.Icon.Default.mergeOptions({
+                iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+                iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+              });
+          } else {
+              console.error("Leaflet 'L' object or L.Icon.Default not found for icon fix.");
+          }
+        } catch (e) {
+          console.error("Error fixing Leaflet icons:", e);
+        }
+      }
+      setMapReady(true); // Set map ready after attempting icon fix
+    };
+
+    setupMapEnvironment();
+  }, []); // Empty dependency array: runs once on mount
 
   const fetchPlaces = async (filters: Set<Place['type']>, query?: string) => {
     setLoading(true);
     setError(null);
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Simulate API Call
+    await new Promise(resolve => setTimeout(resolve, 1000)); 
     try {
       let newFilteredPlaces = initialPlaces.filter(p => filters.has(p.type));
       if (query) {
@@ -127,8 +143,12 @@ const PetMapDisplay = () => {
   };
 
   useEffect(() => {
-    fetchPlaces(activeFilters, searchQuery);
-  }, [activeFilters, searchQuery]);
+    // Initial fetch and re-fetch on filter/search query change
+    // Only fetch if map is ready to avoid issues if fetch completes before map setup
+    if (mapReady) {
+        fetchPlaces(activeFilters, searchQuery);
+    }
+  }, [activeFilters, searchQuery, mapReady]);
 
   const handleFilterChange = (type: Place['type'], checked: boolean) => {
     setActiveFilters(prev => {
@@ -144,10 +164,14 @@ const PetMapDisplay = () => {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchPlaces(activeFilters, searchQuery);
+    // fetchPlaces is now called by the useEffect watching searchQuery and activeFilters
+    // Triggering it here explicitly is fine too, or rely on state change to trigger useEffect
+    if (mapReady) {
+        fetchPlaces(activeFilters, searchQuery);
+    }
   };
-
-  if (!mapReady || !useMap) { // Ensure useMap hook is also loaded
+  
+  if (!mapReady || !DynamicMapContainer || !DynamicTileLayer || !DynamicMarker || !DynamicPopup || !useMap ) {
     return <div className="flex justify-center items-center h-[600px]"><Loader2 className="h-12 w-12 animate-spin text-primary" /> <p className="ml-2">Loading Map...</p></div>;
   }
 
@@ -220,3 +244,4 @@ const PetMapDisplay = () => {
 };
 
 export default PetMapDisplay;
+
