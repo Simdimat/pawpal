@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -16,6 +17,30 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      { // For Yelp images
+        protocol: 'https',
+        hostname: 's3-media1.fl.yelpcdn.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 's3-media2.fl.yelpcdn.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 's3-media3.fl.yelpcdn.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 's3-media4.fl.yelpcdn.com',
+      },
+      { // For Petfinder images
+        protocol: 'https',
+        hostname: 'dl5zpyw5k3jtl.cloudfront.net',
+      },
+      {
+        protocol: 'https',
+        hostname: 'photos.petfinder.com',
+      }
     ],
   },
 };

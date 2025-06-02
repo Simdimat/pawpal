@@ -2,6 +2,8 @@
 import {NextResponse} from 'next/server';
 import type {NextRequest} from 'next/server';
 import {askPawPal, type AskPawPalInput} from '@/ai/flows/ask-pawpal';
+import { getYelpContextForChat } from '@/services/yelp';
+import { getPetfinderContextForChat } from '@/services/petfinder';
 // import { getEmergencyContext } from '@/ai/flows/emergency-flow-context'; // If needed for specific context
 
 // Placeholder for Supabase client/service to save chat history
@@ -21,32 +23,43 @@ export async function POST(request: NextRequest) {
     }
     if (!user_identifier || !session_id) {
       // console.warn('User identifier or session ID missing, proceeding as anonymous for this message.');
-      // Potentially generate temporary ones or handle as needed.
     }
 
-    // Placeholder: Fetch context based on question.
-    // In a real app, this logic would be more sophisticated.
-    // It might involve another AI call for classification, keyword matching, etc.
-    // For now, we'll pass empty/generic context or determined by keywords.
     let yelpContext = '';
-    let redditContext = '';
+    let redditContext = ''; // Reddit fetching is not implemented in this step
     let petfinderContext = '';
 
     const lowerQuestion = question.toLowerCase();
+    const locationForContext = "San Diego, CA"; // Or derive from user profile/question if possible
+
+    // Fetch context using new service functions
     if (lowerQuestion.includes('vet') || lowerQuestion.includes('park') || lowerQuestion.includes('beach') || lowerQuestion.includes('restaurant')) {
-      // yelpContext = "Fetched relevant Yelp data for San Diego: ..."; // Replace with actual Yelp API call via a service
+      try {
+        yelpContext = await getYelpContextForChat(lowerQuestion, locationForContext);
+      } catch (e) {
+        console.error("Error fetching Yelp context for chat:", e);
+        yelpContext = "Could not fetch relevant information from Yelp at this time.";
+      }
     }
-    if (lowerQuestion.includes('skunk') || lowerQuestion.includes('stray') || lowerQuestion.includes('emergency')) {
-      // Potentially use getEmergencyContext or a general Reddit search
-      // redditContext = "Fetched relevant Reddit advice: ..."; // Replace with actual Reddit API call
-    }
-    if (lowerQuestion.includes('shelter') || lowerQuestion.includes('adopt') || lowerQuestion.includes('volunteer')) {
-      // petfinderContext = "Fetched relevant Petfinder data: ..."; // Replace with actual Petfinder API call
+    
+    // Placeholder for Reddit context fetching (currently not implemented)
+    // if (lowerQuestion.includes('skunk') || lowerQuestion.includes('stray') || lowerQuestion.includes('emergency')) {
+    //   // Potentially use getEmergencyContext or a general Reddit search
+    //   // redditContext = "Fetched relevant Reddit advice: ..."; 
+    // }
+
+    if (lowerQuestion.includes('shelter') || lowerQuestion.includes('adopt') || lowerQuestion.includes('volunteer') || lowerQuestion.includes('foster')) {
+      try {
+        petfinderContext = await getPetfinderContextForChat(lowerQuestion, locationForContext);
+      } catch (e) {
+        console.error("Error fetching Petfinder context for chat:", e);
+        petfinderContext = "Could not fetch relevant information from Petfinder at this time.";
+      }
     }
     
     const aiInput: AskPawPalInput = {
       question,
-      yelpContext: yelpContext || undefined, // Ensure undefined if empty, as per schema
+      yelpContext: yelpContext || undefined, 
       redditContext: redditContext || undefined,
       petfinderContext: petfinderContext || undefined,
     };
@@ -57,23 +70,21 @@ export async function POST(request: NextRequest) {
     // Simulate streaming for frontend
     const stream = new ReadableStream({
       async start(controller) {
-        // Split the answer into chunks to simulate streaming
-        const chunkSize = 50; // characters
+        const chunkSize = 50; 
         for (let i = 0; i < aiAnswer.length; i += chunkSize) {
           controller.enqueue(new TextEncoder().encode(aiAnswer.substring(i, i + chunkSize)));
-          await new Promise(resolve => setTimeout(resolve, 50)); // Simulate network delay
+          await new Promise(resolve => setTimeout(resolve, 50)); 
         }
         controller.close();
       }
     });
     
-    // Save conversation after getting the full AI response
     if (user_identifier && session_id) {
       await saveConversation(user_identifier, session_id, question, aiAnswer);
     }
     
     return new Response(stream, {
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' }, // Or text/event-stream for true SSE
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
 
   } catch (error: any) {
@@ -92,7 +103,7 @@ export async function POST(request: NextRequest) {
 
     let clientErrorMessage = 'Failed to get response from PawPal AI. Please check server logs for details.';
     const lowerErrorMessage = errorMessage.toLowerCase();
-    let httpStatus = 500; // Default status for internal errors
+    let httpStatus = 500; 
 
     if (lowerErrorMessage.includes('api key') || 
         lowerErrorMessage.includes('authentication') || 
@@ -105,9 +116,11 @@ export async function POST(request: NextRequest) {
       clientErrorMessage = 'The PawPal AI service is temporarily overloaded or unavailable. This is usually a temporary issue with the AI provider. Please try again in a few moments.';
       httpStatus = 503; 
     } else if (errorMessage) {
+      // Truncate long error messages from external services
       clientErrorMessage = `PawPal AI service error: ${errorMessage.substring(0, 150)}${errorMessage.length > 150 ? '...' : ''}. Check server logs for more details.`;
     }
     
     return NextResponse.json({error: clientErrorMessage}, {status: httpStatus});
   }
 }
+

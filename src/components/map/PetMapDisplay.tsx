@@ -1,45 +1,43 @@
 
 "use client";
-import { useState }
-from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { MapPin, Search, Filter, AlertTriangle, Loader2 } from "lucide-react";
+import { MapPin, Search, Filter, AlertTriangle, Loader2, ExternalLink } from "lucide-react";
 import Image from "next/image";
+import type { YelpBusiness } from '@/services/yelp';
+import type { PetfinderOrganization } from '@/services/petfinder';
 
-// Placeholder for locations. In a real app, this would come from an API.
-const placeholderLocations = [
-  { id: "1", name: "Dog Beach (Ocean Beach)", type: "Beach", lat: 32.7530, lng: -117.2520, dataAiHint: "beach dogs", address: "Ocean Beach, San Diego, CA" },
-  { id: "2", name: "Fiesta Island Park", type: "Park", lat: 32.7760, lng: -117.2200, dataAiHint: "park dogs", address: "Mission Bay, San Diego, CA" },
-  { id: "3", name: "Balboa Park (Nate's Point)", type: "Park", lat: 32.7300, lng: -117.1446, dataAiHint: "city park dogs", address: "Balboa Park, San Diego, CA" },
-  { id: "4", name: "Coronado Dog Beach", type: "Beach", lat: 32.6800, lng: -117.1820, dataAiHint: "sandy beach dogs", address: "Coronado, CA" },
-  { id: "5", name: "VCA Emergency Animal Hospital", type: "Vet", lat: 32.7603, lng: -117.1531, dataAiHint: "veterinary clinic", address: "Hotel Circle, San Diego, CA" },
-  { id: "6", name: "The Patio on Lamont", type: "Restaurant", lat: 32.8004, lng: -117.2500, dataAiHint: "pet friendly restaurant", address: "Pacific Beach, San Diego, CA" },
-];
-
-const filterOptions = [
-  { id: 'parks', label: 'Dog Parks', type: 'Park' },
-  { id: 'beaches', label: 'Dog Beaches', type: 'Beach' },
-  { id: 'vets', label: 'Vets', type: 'Vet' },
-  { id: 'restaurants', label: 'Pet-Friendly Restaurants', type: 'Restaurant' },
-];
 
 type PlaceType = 'Park' | 'Beach' | 'Vet' | 'Restaurant' | 'Shelter';
 
-interface Place {
+interface BasePlace {
   id: string;
   name: string;
   type: PlaceType;
+  address?: string;
+  imageUrl?: string;
+  websiteUrl?: string;
+  dataAiHint: string;
   latitude?: number;
   longitude?: number;
-  address?: string;
-  rating?: number;
-  dataAiHint: string;
 }
+
+// Combine types for a unified Place interface
+interface Place extends BasePlace, Partial<YelpBusiness>, Partial<PetfinderOrganization> {}
+
+
+const filterOptions: { id: string; label: string; type: PlaceType; yelpCategory?: string; petfinderType?: boolean }[] = [
+  { id: 'parks', label: 'Dog Parks', type: 'Park', yelpCategory: 'dogparks' },
+  { id: 'beaches', label: 'Dog Beaches', type: 'Beach', yelpCategory: 'beaches' }, // Assuming Yelp might have 'dogbeach' or similar under beaches
+  { id: 'vets', label: 'Vets', type: 'Vet', yelpCategory: 'veterinarians' },
+  { id: 'restaurants', label: 'Pet-Friendly Restaurants', type: 'Restaurant', yelpCategory: 'restaurants,petfriendly' },
+  { id: 'shelters', label: 'Shelters', type: 'Shelter', petfinderType: true },
+];
 
 
 export default function PetMapDisplay() {
@@ -47,9 +45,113 @@ export default function PetMapDisplay() {
   const [activeFilters, setActiveFilters] = useState<Set<PlaceType>>(
     new Set(filterOptions.map(f => f.type as PlaceType))
   );
-  const [displayedLocations, setDisplayedLocations] = useState<Place[]>(placeholderLocations);
-  const [isLoading, setIsLoading] = useState(false);
+  const [allFetchedLocations, setAllFetchedLocations] = useState<Place[]>([]);
+  const [displayedLocations, setDisplayedLocations] = useState<Place[]>([]);
+  const [isLoading, setIsLoading] = useState(true); // Start loading initially
   const [error, setError] = useState<string | null>(null);
+
+  const SAN_DIEGO_LOCATION = "San Diego, CA";
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      setIsLoading(true);
+      setError(null);
+      let combinedLocations: Place[] = [];
+
+      try {
+        // Fetch Yelp locations (Parks, Beaches, Vets, Restaurants)
+        const yelpCategoriesToFetch = filterOptions
+          .filter(f => f.yelpCategory && activeFilters.has(f.type))
+          .map(f => ({ type: f.type, category: f.yelpCategory!, term: f.label })); // Using label as a broad term
+
+        for (const { type, category, term } of yelpCategoriesToFetch) {
+            const yelpResponse = await fetch(`/api/yelp-search?term=${encodeURIComponent(term)}&location=${encodeURIComponent(SAN_DIEGO_LOCATION)}&categories=${encodeURIComponent(category)}&limit=10`);
+            if (yelpResponse.ok) {
+                const yelpData: YelpBusiness[] = await yelpResponse.json();
+                const yelpPlaces: Place[] = yelpData.map(biz => ({
+                    ...biz,
+                    id: `yelp-${biz.id}`,
+                    type: type,
+                    address: biz.location?.display_address.join(', '),
+                    imageUrl: biz.image_url,
+                    websiteUrl: biz.url,
+                    dataAiHint: type.toLowerCase(),
+                    latitude: biz.coordinates?.latitude,
+                    longitude: biz.coordinates?.longitude,
+                }));
+                combinedLocations.push(...yelpPlaces);
+            } else {
+                 console.warn(`Failed to fetch ${type} from Yelp`);
+            }
+        }
+        
+        // Fetch Petfinder locations (Shelters)
+        if (activeFilters.has('Shelter')) {
+            const petfinderResponse = await fetch(`/api/petfinder-organizations?location=${encodeURIComponent(SAN_DIEGO_LOCATION)}&limit=10`);
+            if (petfinderResponse.ok) {
+                const petfinderData: PetfinderOrganization[] = await petfinderResponse.json();
+                const petfinderPlaces: Place[] = petfinderData.map(org => ({
+                    ...org,
+                    id: `pf-${org.id}`,
+                    name: org.name,
+                    type: 'Shelter',
+                    address: `${org.address?.address1 || ''}, ${org.address?.city || ''}, ${org.address?.state || ''}`.replace(/^,|,$/g, '').trim(),
+                    imageUrl: org.photos?.[0]?.medium,
+                    websiteUrl: org.website || org.url,
+                    dataAiHint: "animal shelter",
+                    // Petfinder API might not always have coordinates directly for orgs
+                }));
+                combinedLocations.push(...petfinderPlaces);
+            } else {
+                console.warn('Failed to fetch shelters from Petfinder');
+            }
+        }
+        
+        // Remove duplicates by ID before setting
+        const uniqueLocations = Array.from(new Map(combinedLocations.map(item => [item.id, item])).values());
+        setAllFetchedLocations(uniqueLocations);
+        setDisplayedLocations(uniqueLocations);
+
+      } catch (e: any) {
+        console.error("Error fetching initial map locations:", e);
+        setError("Failed to load location data. Please try again later.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchInitialData();
+  }, []); // Run once on mount to get all data types
+
+  const applyFiltersAndSearch = () => {
+    setIsLoading(true);
+    setError(null);
+    
+    let newFilteredPlaces = allFetchedLocations.filter(p => activeFilters.has(p.type as PlaceType));
+    if (searchQuery) {
+      newFilteredPlaces = newFilteredPlaces.filter(p =>
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.address && p.address.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+    }
+    
+    setDisplayedLocations(newFilteredPlaces);
+    if (newFilteredPlaces.length === 0 && (searchQuery || activeFilters.size < filterOptions.length || activeFilters.size > 0 )) {
+      setError("No locations match your current filters or search.");
+    }
+    setIsLoading(false);
+  };
+  
+  // Re-filter when activeFilters or searchQuery changes, but debounce/delay search
+   useEffect(() => {
+    const handler = setTimeout(() => {
+        // Only apply if allFetchedLocations has data, otherwise initial load handles it
+        if (allFetchedLocations.length > 0 || !isLoading) { 
+            applyFiltersAndSearch();
+        }
+    }, 300); // Debounce search/filter application
+    return () => clearTimeout(handler);
+  }, [searchQuery, activeFilters, allFetchedLocations, isLoading]);
 
 
   const handleFilterChange = (type: PlaceType, checked: boolean) => {
@@ -60,36 +162,15 @@ export default function PetMapDisplay() {
       } else {
         newFilters.delete(type);
       }
-      // Simulate filtering
-      filterAndSearchLocations(searchQuery, newFilters);
-      return newFilters;
+      return newFilters; // applyFiltersAndSearch will be triggered by useEffect
     });
   };
 
-  const filterAndSearchLocations = (query: string, filters: Set<PlaceType>) => {
-    setIsLoading(true);
-    setError(null);
-    // Simulate API call / filtering delay
-    setTimeout(() => {
-      let newFilteredPlaces = placeholderLocations.filter(p => filters.has(p.type as PlaceType));
-      if (query) {
-        newFilteredPlaces = newFilteredPlaces.filter(p =>
-          p.name.toLowerCase().includes(query.toLowerCase()) ||
-          (p.address && p.address.toLowerCase().includes(query.toLowerCase()))
-        );
-      }
-      setDisplayedLocations(newFilteredPlaces);
-      if (newFilteredPlaces.length === 0 && (query || filters.size < filterOptions.length)) {
-        setError("No locations match your current filters or search.");
-      }
-      setIsLoading(false);
-    }, 500);
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    applyFiltersAndSearch(); // Explicit search trigger
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    filterAndSearchLocations(searchQuery, activeFilters);
-  };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 min-h-[600px]">
@@ -98,7 +179,7 @@ export default function PetMapDisplay() {
           <CardTitle className="flex items-center gap-2 font-headline"><Filter className="w-5 h-5 text-primary"/> Filters & Search</CardTitle>
         </CardHeader>
         <CardContent className="flex-grow flex flex-col">
-          <form onSubmit={handleSearch} className="space-y-4 mb-4">
+          <form onSubmit={handleSearchSubmit} className="space-y-4 mb-4">
             <div className="relative">
               <Input
                 placeholder="Search by name or address..."
@@ -128,8 +209,6 @@ export default function PetMapDisplay() {
             ))}
             </div>
           </ScrollArea>
-          {isLoading && <div className="mt-4 flex items-center justify-center text-sm text-muted-foreground"><Loader2 className="w-4 h-4 mr-2 animate-spin"/>Loading...</div>}
-          {error && <div className="mt-4 text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
         </CardContent>
       </Card>
 
@@ -159,13 +238,16 @@ export default function PetMapDisplay() {
             <CardTitle className="font-headline">Matching Locations</CardTitle>
           </CardHeader>
           <CardContent>
-            {displayedLocations.length > 0 ? (
+             {isLoading && <div className="flex items-center justify-center text-sm text-muted-foreground py-4"><Loader2 className="w-5 h-5 mr-2 animate-spin"/>Loading locations...</div>}
+            {error && <div className="mt-4 text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
+            
+            {!isLoading && !error && displayedLocations.length > 0 ? (
               <ScrollArea className="h-[200px] md:h-[calc(100vh-550px)] min-h-[200px]">
                 <div className="space-y-3">
                   {displayedLocations.map(loc => (
                     <div key={loc.id} className="p-3 border rounded-md bg-card hover:shadow-md transition-shadow">
                        <Image
-                        src={`https://placehold.co/300x150.png`}
+                        src={loc.imageUrl || `https://placehold.co/300x150.png?text=${encodeURIComponent(loc.name)}`}
                         alt={loc.name}
                         width={300}
                         height={150}
@@ -174,7 +256,14 @@ export default function PetMapDisplay() {
                       />
                       <h4 className="font-semibold text-md text-primary">{loc.name}</h4>
                       <p className="text-sm text-muted-foreground">{loc.type} - {loc.address}</p>
-                      <Button variant="outline" size="sm" className="mt-2 w-full text-xs" onClick={() => alert('Future: Show on interactive map')}>
+                      {loc.websiteUrl && (
+                        <Button asChild variant="link" size="sm" className="mt-1 px-0 text-xs">
+                          <a href={loc.websiteUrl} target="_blank" rel="noopener noreferrer">
+                            Visit Website <ExternalLink className="ml-1 h-3 w-3" />
+                          </a>
+                        </Button>
+                      )}
+                       <Button variant="outline" size="sm" className="mt-2 w-full text-xs" onClick={() => alert(`Future: Show ${loc.name} on interactive map (Lat: ${loc.latitude}, Lng: ${loc.longitude})`)}>
                         Show on Map (Placeholder)
                       </Button>
                     </div>
@@ -182,7 +271,7 @@ export default function PetMapDisplay() {
                 </div>
               </ScrollArea>
             ) : (
-              !isLoading && <p className="text-muted-foreground">No locations to display. Try adjusting your search or filters.</p>
+              !isLoading && !error && <p className="text-muted-foreground text-center py-4">No locations to display. Try adjusting your search or filters.</p>
             )}
           </CardContent>
         </Card>
