@@ -113,10 +113,11 @@ const WeatherWidget = () => {
   return (
     <div className="flex items-center space-x-2 text-sm text-foreground/90" title={`${weather.description} in ${weather.locationName}`}>
       <WeatherIcon condition={weather.condition} iconCode={weather.iconCode} className="h-5 w-5 text-accent" />
-      <span>{weather.temperature}°C</span>
+      <span>{weather.temperature}°F</span> {/* Changed from °C to °F */}
       {/* <span className="hidden sm:inline">- {weather.locationName}</span> */}
     </div>
   );
 };
 
 export default WeatherWidget;
+

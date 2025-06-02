@@ -26,7 +26,7 @@ export async function fetchWeatherByCoords(lat: number, lon: number) {
         lat,
         lon,
         appid: API_KEY,
-        units: 'metric', // For Celsius
+        units: 'imperial', // Changed from metric to imperial for Fahrenheit
       },
     });
     return response.data;
@@ -35,3 +35,4 @@ export async function fetchWeatherByCoords(lat: number, lon: number) {
     throw new Error('Failed to fetch weather data.');
   }
 }
+
