@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Filter, Search, AlertTriangle, Loader2, ExternalLink, Eye } from "lucide-react"; // Removed MapPin as it's now from Leaflet
+import { Filter, Search, AlertTriangle, Loader2, ExternalLink, Eye } from "lucide-react";
 import Image from "next/image";
 import type { YelpBusiness } from '@/services/yelp';
 import type { PetfinderOrganization } from '@/services/petfinder';
@@ -95,16 +95,23 @@ export default function PetMapDisplay() {
     }
   }, []);
 
-  // Cleanup map instance on component unmount
+  // Corrected cleanup for map instance
   useEffect(() => {
-    const mapInstanceToClean = mapRef.current;
     return () => {
-      if (mapInstanceToClean) {
-        mapInstanceToClean.remove();
+      if (mapRef.current) {
+        try {
+          // Check if map container is still part of the document to prevent errors
+          if (mapRef.current.getContainer() && document.body.contains(mapRef.current.getContainer())) {
+            mapRef.current.remove();
+          }
+        } catch (e) {
+          // Log error during cleanup if any, but don't let it break the app
+          console.warn("Error during map cleanup:", e);
+        }
+        mapRef.current = null; // Nullify the ref
       }
-      mapRef.current = null; // Ensure ref is cleared for potential remounts
     };
-  }, []);
+  }, []); // Empty dependency array: cleanup runs on component unmount.
 
 
   useEffect(() => {
@@ -154,8 +161,6 @@ export default function PetMapDisplay() {
                     imageUrl: org.photos?.[0]?.medium,
                     websiteUrl: org.website || org.url,
                     dataAiHint: "animal shelter",
-                    // Petfinder API often does not return precise lat/lng for orgs in search
-                    // Geocoding would be needed if precise map placement is critical and not provided
                     latitude: undefined, 
                     longitude: undefined,
                 }));
@@ -165,7 +170,6 @@ export default function PetMapDisplay() {
             }
         }
         
-        // Filter out locations that don't have coordinates, as they can't be mapped.
         const uniqueLocations = Array.from(new Map(combinedLocations.map(item => [item.id, item])).values())
                                   .filter(loc => typeof loc.latitude === 'number' && typeof loc.longitude === 'number');
         setAllFetchedLocations(uniqueLocations);
@@ -234,7 +238,7 @@ export default function PetMapDisplay() {
     }
   }, [selectedMapLocation]);
 
-  const canRenderMap = clientMounted && leafletLib && customLeafletIcon !== null;
+  const canRenderMap = clientMounted && leafletLib && typeof leafletLib.Map === 'function' && customLeafletIcon !== null;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 min-h-[600px]">
@@ -258,7 +262,7 @@ export default function PetMapDisplay() {
             </div>
           </form>
           <Label className="font-semibold mb-2 block">Categories:</Label>
-          <ScrollArea className="flex-grow pr-3"> {/* Added pr-3 for scrollbar spacing */}
+          <ScrollArea className="flex-grow pr-3">
             <div className="space-y-2">
             {filterOptions.map(opt => (
               <div key={opt.id} className="flex items-center space-x-2">
@@ -342,8 +346,8 @@ export default function PetMapDisplay() {
             {error && <div className="mt-4 text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
 
             {!isLoading && !error && displayedLocations.length > 0 ? (
-               <ScrollArea className="h-[200px] md:h-[calc(100vh-650px)] min-h-[200px]"> {/* Adjusted height calculation for potentially smaller screens or more content above */}
-                <div className="space-y-3 pr-3"> {/* Added pr-3 for scrollbar spacing */}
+               <ScrollArea className="h-[200px] md:h-[calc(100vh-650px)] min-h-[200px]">
+                <div className="space-y-3 pr-3">
                   {displayedLocations.map(loc => (
                     <div key={loc.id} className="p-3 border rounded-md bg-card hover:shadow-md transition-shadow">
                        <Image
@@ -353,7 +357,7 @@ export default function PetMapDisplay() {
                         height={150}
                         className="w-full h-24 object-cover rounded-md mb-2"
                         data-ai-hint={loc.dataAiHint || loc.type.toLowerCase()}
-                        unoptimized={loc.imageUrl?.includes('cloudfront.net')} // Petfinder images sometimes cause issues with optimizer
+                        unoptimized={loc.imageUrl?.includes('cloudfront.net')}
                       />
                       <h4 className="font-semibold text-md text-primary">{loc.name}</h4>
                       <p className="text-sm text-muted-foreground">{loc.type} - {loc.address}</p>
@@ -380,3 +384,4 @@ export default function PetMapDisplay() {
     </div>
   );
 }
+
