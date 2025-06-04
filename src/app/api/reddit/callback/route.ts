@@ -1,12 +1,11 @@
 
+import { Buffer } from 'buffer';
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb'; // Adjust the path if necessary
 
-export async function POST(req: NextRequest) {
   export async function GET(req: NextRequest) {
-  const redirect_uri = process.env.REDDIT_REDIRECT_URI as string;
-
   const code = req.nextUrl.searchParams.get('code');
+  const redirect_uri = process.env.REDDIT_REDIRECT_URI as string;
   const redditClientId = process.env.REDDIT_CLIENT_ID;
   const redditClientSecret = process.env.REDDIT_CLIENT_SECRET;
   const redditRedirectUri = process.env.REDDIT_REDIRECT_URI;
