@@ -1,0 +1,1654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>SAT Math ExplAIner (Beta)</title>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css" />
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1e3a8a;
+      --secondary: #1e40af;
+      --accent: #10b981;
+      --success: #059669;
+      --warning: #fb923c;
+      --danger: #f87171;
+      --info: #3b82f6;
+      --light: #f8fafc;
+      --dark: #1e293b;
+      --gray: #6b7280;
+      --top-bar-bg: #1c3a9a;
+      --sidebar-bg: #1e293b;
+      --sidebar-text: #f1f5f9;
+      --sidebar-hover: #334155;
+      --sidebar-active: #10b981;
+      --sidebar-border: #334155;
+      --sidebar-width: 280px;
+      /* --sidebar-collapsed-width: 70px; Removed as desktop collapse is disabled */
+      --top-bar-height: 70px;
+      --card-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+      --card-shadow-hover: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+      --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      --welcome-body-gradient: linear-gradient(to bottom right, #f9fafb, #eef2ff);
+      --welcome-hero-gradient: radial-gradient(circle at center, #e0e7ff, #f9fafb);
+      --cta-bg: linear-gradient(to right, var(--primary), var(--secondary));
+      --main-content-bg: #f9fafb;
+    }
+
+    html, body {
+      max-width: 100%; margin: 0; padding: 0; height: 100%;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background-color: #f8fafc;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    @supports (font-variation-settings: normal) { html, body { font-family: 'Inter var', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; } }
+    * { box-sizing: border-box; }
+
+    #top-bar { width: 100%; background-color: var(--top-bar-bg); color: white; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; height: var(--top-bar-height); z-index: 1001; position: relative; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); }
+    #top-bar h1 { margin: 0; font-size: 1.5em; font-weight: 700; white-space: nowrap; color: white; }
+    #top-bar h1 .ai-red { color: var(--accent); font-weight: 800; }
+    #top-bar .email-container { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+    #top-bar .email-container span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; display: inline-block; vertical-align: middle; font-weight: 500; }
+    #top-bar input[type="email"] { padding: 8px 12px; border-radius: 6px; border: none; font-size: 14px; min-width: 180px; background: rgba(255, 255, 255, 0.9); transition: var(--transition); }
+    #top-bar input[type="email"]:focus { outline: none; background: white; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3); }
+    #top-bar button { padding: 8px 16px; border: none; border-radius: 6px; background-color: var(--dark); color: white; cursor: pointer; white-space: nowrap; font-weight: 600; transition: var(--transition); box-shadow: var(--card-shadow); display: inline-flex; align-items: center; justify-content: center; }
+    #top-bar button#saveEmailButton i { font-size: 1.1em; margin: 0; }
+    #top-bar button:hover { background-color: #334155; transform: translateY(-1px); }
+    #top-bar .logout-button { background-color: var(--danger); }
+    #top-bar .logout-button:hover { background-color: #b91c1c; }
+
+    #app-container { display: flex; flex-grow: 1; height: calc(100vh - var(--top-bar-height)); width: 100%; overflow: hidden; }
+
+    /* ==== START: Sidebar Style Updates ==== */
+    #sidebar {
+        width: var(--sidebar-width);
+        min-width: var(--sidebar-width); /* Ensure width is maintained */
+        background: var(--sidebar-bg);
+        color: var(--sidebar-text);
+        padding: 15px 0 5px 0; /* Reduced top/bottom padding */
+        transition: left 0.3s ease; /* Only transition left for mobile */
+        position: relative;
+        overflow: hidden; /* Prevent scrollbars on sidebar itself */
+        flex-shrink: 0;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    #sidebar h2 {
+        text-align: center;
+        margin: 0 15px 15px; /* Reduced bottom margin */
+        padding: 0 0 10px; /* Reduced bottom padding */
+        font-size: 1.3em; white-space: nowrap; flex-shrink: 0; font-weight: 700; color: var(--light);
+        position: relative; display: flex; align-items: center; justify-content: center;
+    }
+    /* Hide desktop collapse button */
+    #sidebar-title-toggle-btn { display: none; }
+    #sidebar h2 span { flex-grow: 1; text-align: center; }
+    #sidebar h2::after { content: ""; position: absolute; bottom: 0px; left: 50%; transform: translateX(-50%); width: 50px; height: 3px; background: var(--accent); border-radius: 3px; }
+    #sidebar ul {
+        list-style: none; padding: 0; margin: 0;
+        flex-grow: 1; /* Allow ul to take space */
+        overflow-y: hidden; /* Remove scrollbar from UL */
+        scrollbar-width: none; /* Hide scrollbar for Firefox */
+    }
+     #sidebar ul::-webkit-scrollbar { display: none; } /* Hide scrollbar for Chrome/Safari/Edge */
+    #sidebar ul li {
+        padding: 12px 25px; /* Reduced vertical padding */
+        cursor: pointer; transition: var(--transition); background: rgba(255, 255, 255, 0.05);
+        border-left: 3px solid transparent; margin-bottom: 3px; /* Reduced margin */
+        white-space: normal; word-wrap: break-word; font-weight: 500;
+        font-size: 0.95em; /* Slightly smaller font */
+    }
+    #sidebar ul li:hover:not(.category-group-header) { background: var(--sidebar-hover); border-left: 3px solid var(--accent); }
+    #sidebar ul li.active { background: var(--sidebar-active); font-weight: 600; border-left: 3px solid white; }
+    #sidebar ul li.category-group-header { background: none; cursor: default; color: #94a3b8; font-weight: 700; font-size: 0.8em; padding-top: 20px; padding-bottom: 6px; border-bottom: none; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0; border-left: none; } #sidebar ul li.category-group-header:hover { background: none; }
+
+    /* Hide desktop collapsed state toggle container */
+    #sidebar-toggle-container { display: none !important; } /* Always hide */
+
+    .sidebar-button {
+        display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.1); border: none; color: var(--sidebar-text);
+        font-size: 1.0em; /* Slightly smaller */
+        cursor: pointer; padding: 8px 10px; /* Reduced padding */
+        margin: 3px 15px; /* Reduced margin */
+        border-radius: 8px; transition: var(--transition); width: calc(100% - 30px); font-weight: 600; flex-shrink: 0;
+    }
+    .sidebar-button:hover { background: rgba(255, 255, 255, 0.2); transform: translateY(-1px); } .sidebar-button i { margin-right: 8px; }
+
+    .progress-indicator {
+        background: rgba(255, 255, 255, 0.05); padding: 6px 15px; /* Reduced padding */
+        border-radius: 8px; box-shadow: none; display: flex; align-items: center; font-weight: 600; color: var(--sidebar-text);
+        margin: 5px 15px 5px; /* Adjusted margin */
+        width: calc(100% - 30px); flex-shrink: 0; order: 3; /* Ensure it's at bottom */
+    }
+    .progress-indicator i { margin-right: 8px; color: var(--success); font-size: 1.0em; } /* Slightly smaller */
+    /* ==== END: Sidebar Style Updates ==== */
+
+    /* No desktop collapsed styles needed anymore */
+    /* #sidebar.collapsed { ... } REMOVED */
+
+    #main-content {
+      flex-grow: 1;
+      background: var(--main-content-bg);
+      overflow-y: auto;
+      position: relative;
+      height: 100%;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    #welcome-page ~ #search-bar, #welcome-page ~ #category-title, #welcome-page ~ #problem-list, #welcome-page ~ #pagination-controls, #welcome-page ~ #chat-container { display: none; }
+    #search-bar { width: calc(100% - 50px); padding: 12px 15px; margin: 25px 25px 20px 25px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 15px; transition: var(--transition); box-shadow: var(--card-shadow); display: block; } #search-bar:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3); }
+    #category-title { text-align: center; margin: 0 25px 25px 25px; color: var(--dark); font-weight: 700; font-size: 1.8em; position: relative; padding-bottom: 15px; display: block; } #category-title::after { content: ""; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); width: 80px; height: 4px; background: var(--accent); border-radius: 2px; }
+    #problem-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; margin-bottom: 30px; padding: 0 25px; }
+    .problem-card { background: white; padding: 20px; border-radius: 12px; cursor: pointer; transition: var(--transition); border: 1px solid #e2e8f0; box-shadow: var(--card-shadow); position: relative; overflow: hidden; } .problem-card::before { content: ""; position: absolute; top: 0; left: 0; width: 5px; height: 100%; background: var(--primary); transition: var(--transition); } .problem-card:hover { transform: translateY(-5px); box-shadow: var(--card-shadow-hover); border-color: var(--primary); } .problem-card:hover::before { width: 8px; background: var(--accent); } .problem-card h3 { margin: 0 0 15px; color: var(--dark); font-size: 1.1em; font-weight: 700; display: flex; align-items: center; } .problem-card h3::before { content: "#"; color: var(--accent); margin-right: 8px; font-weight: 800; } .problem-card .problem-text { font-size: 0.95em; line-height: 1.6; max-height: 150px; overflow: hidden; position: relative; color: var(--dark); }
+    .problem-card .problem-text::after { content: ""; position: absolute; bottom: 0; left: 0; width: 100%; height: 40px; background: linear-gradient(to bottom, rgba(255, 255, 255, 0), white); pointer-events: none; }
+    .problem-card.chatted { background-color: #f0fdf4; border-color: #86efac; } .problem-card.chatted::before { background: var(--success); }
+    .problem-card.chatted .problem-text::after { background: linear-gradient(to bottom, rgba(240, 253, 244, 0), #f0fdf4); }
+    .problem-card.chatted::after { content: "✓ Completed"; position: absolute; top: 10px; right: 10px; background: var(--success); color: white; padding: 3px 8px; border-radius: 12px; font-size: 0.7em; font-weight: 600; }
+    #pagination-controls { display: flex; justify-content: center; align-items: center; padding: 20px 25px; margin-top: 20px; gap: 15px; } #pagination-controls button { padding: 10px 18px; background-color: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; transition: var(--transition); font-weight: 600; box-shadow: var(--card-shadow); display: inline-flex; align-items: center; gap: 5px; } #pagination-controls button:hover:not(:disabled) { background-color: var(--primary-dark); transform: translateY(-2px); } #pagination-controls button:disabled { background-color: #cbd5e1; cursor: not-allowed; transform: none; box-shadow: none; } #pagination-info { font-size: 0.95em; color: var(--gray); font-weight: 500; min-width: 120px; text-align: center; }
+    #chat-container { display: none; margin-top: 30px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0; background: #ffffff; position: relative; height: calc(80vh - 60px); max-height: 700px; display: flex; flex-direction: column; box-shadow: var(--card-shadow); margin-left: 25px; margin-right: 25px; margin-bottom: 25px; } #chat-container .chat-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background-color: var(--top-bar-bg); border-bottom: 1px solid #e2e8f0; border-top-left-radius: 12px; border-top-right-radius: 12px; } #chat-container .chat-header #chat-problem-title { margin: 0; font-size: 1.2em; color: white; font-weight: 600; } #chat-container .exit-button { padding: 8px 15px; background: var(--danger); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9em; font-weight: 600; transition: var(--transition); } #chat-container .exit-button:hover { background: #b91c1c; transform: translateY(-1px); }
+    #chatbox { flex-grow: 1; overflow-y: auto; padding: 20px; border-bottom: 1px solid #e2e8f0; background-color: #f8fafc; }
+    #chatbox p { margin-bottom: 15px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; max-width: 100%; }
+
+    .user-message {
+      color: white;
+      font-weight: 500;
+      background: var(--primary);
+      padding: 12px 16px;
+      border-radius: 8px;
+      box-shadow: var(--card-shadow);
+      width: fit-content;
+      max-width: 85%;
+      margin-left: auto;
+      margin-right: 0;
+      text-align: right;
+      display: block;
+    }
+    .bot-message {
+      color: var(--dark);
+      background: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      box-shadow: var(--card-shadow);
+      max-width: 100%;
+      margin-right: auto;
+      margin-left: 0;
+      text-align: left;
+      display: block;
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+    }
+
+    .bot-message strong { color: var(--primary); }
+    .bot-message h3 { margin-top: 15px; margin-bottom: 8px; font-size: 1.1em; color: var(--primary-dark); font-weight: 700; position: relative; padding-bottom: 5px; }
+    .bot-message h3::after { content: ""; position: absolute; bottom: 0; left: 0; width: 30px; height: 2px; background: var(--accent); }
+    .loading-message { font-weight: 500; color: var(--gray); animation: flash 1.5s infinite; background-color: #e2e8f0; }
+    @keyframes flash { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+    .code-block, .code-block-generic { position: relative; background-color: #282c34; color: #abb2bf; padding: 12px; border-radius: 8px; margin: 15px 0; font-family: 'Courier New', Courier, monospace; font-size: 0.9em; overflow-x: auto; box-shadow: var(--card-shadow); }
+    .code-block pre, .code-block-generic pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; }
+    .copy-button { position: absolute; top: 8px; right: 8px; background: #61afef; color: #282c34; border: none; padding: 5px 10px; font-size: 12px; border-radius: 4px; cursor: pointer; font-weight: 600; transition: var(--transition); }
+    .copy-button:hover { background: #528bff; }
+    .code-block-generic { padding-top: 12px; }
+    .input-container { display: flex; gap: 10px; padding: 15px; background: white; flex-shrink: 0; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; border-top: 1px solid #e2e8f0; }
+    #userInput { flex-grow: 1; padding: 12px 15px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 15px; transition: var(--transition); }
+    #userInput:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3); }
+    button#sendButton { padding: 12px 20px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; transition: var(--transition); font-weight: 600; box-shadow: var(--card-shadow); }
+    button#sendButton:hover { background: var(--primary-dark); transform: translateY(-1px); }
+    .clickable-option, .answer-option { display: inline-block; border: 1px solid var(--primary); background-color: #eff6ff; color: var(--primary-dark); border-radius: 8px; padding: 8px 12px; margin: 6px 4px; cursor: pointer; font-size: 0.95em; transition: var(--transition); line-height: 1.4; white-space: normal; font-weight: 500; box-shadow: var(--card-shadow); }
+    .answer-option { border-color: var(--success); background-color: #ecfdf5; color: #059669; }
+    .clickable-option:hover, .answer-option:hover { transform: translateY(-2px); box-shadow: var(--card-shadow-hover); }
+    .clickable-option:hover { background-color: #dbeafe; }
+    .answer-option:hover { background-color: #d1fae5; }
+    .disabled { pointer-events: none; opacity: 0.5; cursor: default; transform: none !important; }
+    .katex { font-size: 1.1rem; padding: 0 2px; }
+    .katex-display { margin: 15px 0; padding: 12px; background-color: #f8fafc; border-radius: 6px; overflow-x: auto; box-shadow: var(--card-shadow); }
+
+    #welcome-page { display: none; width: 100%; flex-grow: 1; background: var(--welcome-body-gradient); overflow-y: auto; padding: 0; }
+    .welcome-top-section { display: flex; justify-content: space-between; align-items: center; padding: 2.5rem 3rem 2.5rem; background: var(--welcome-hero-gradient); border-bottom: 1px solid #e5e7eb; flex-wrap: wrap; gap: 2rem; } .welcome-top-left { max-width: 600px; flex: 1; min-width: 300px; text-align: left; } .welcome-top-left .welcome-main-title { color: var(--dark); font-size: 3.5rem; font-weight: 800; margin-bottom: 0.5rem; line-height: 1.2; } .welcome-top-left .welcome-main-title .ai-red { color: var(--accent); } .welcome-top-left .welcome-subtitle { color: var(--gray); font-size: 1.3rem; margin-bottom: 2rem; line-height: 1.6; } .welcome-top-left .welcome-start-btn { background: var(--primary-dark); color: white; font-size: 1.1rem; font-weight: 600; border: none; padding: 1rem 2rem; border-radius: 0.6rem; cursor: pointer; transition: var(--transition); box-shadow: 0 5px 15px rgba(99, 102, 241, 0.3); } .welcome-top-left .welcome-start-btn:hover { background-color: var(--secondary); transform: translateY(-2px) scale(1.02); box-shadow: var(--card-shadow-hover); }
+    .welcome-info-section { padding: 3rem 3rem; max-width: 1100px; margin: 0 auto; }
+    .how-it-works-smart-tools-row { display: flex; align-items: flex-start; gap: 3rem; flex-wrap: wrap; margin-bottom: 4rem; } .how-it-works-left { flex: 1; min-width: 300px; } .how-it-works-left h2 { display: flex; align-items: center; gap: 10px; color: var(--dark); font-size: 1.8em; font-weight: 700; margin-bottom: 20px; } .how-it-works-left h2 i { color: var(--warning); } .how-it-works-left ol { list-style: none; padding: 0; margin: 0; counter-reset: how-to-counter; } .how-it-works-left ol li { color: var(--dark); font-weight: 700; margin-bottom: 15px; position: relative; padding-left: 30px; font-size: 1.1em; line-height: 1.6; } .how-it-works-left ol li::before { counter-increment: how-to-counter; content: counter(how-to-counter) "."; position: absolute; left: 0; top: 0; font-weight: 800; color: var(--dark); width: 20px; text-align: right; }
+    .smart-tools-card { flex: 1; background: white; padding: 1.5rem; border-radius: 1rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); min-width: 300px; } .smart-tools-card h3 { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; color: var(--primary-dark); margin-bottom: 0.4rem; font-weight: 700; } .smart-tools-card h3 i { color: var(--primary-dark); } .smart-tools-card p { color: var(--dark); font-weight: 600; margin-bottom: 15px; font-size: 1em; line-height: 1.6; } .smart-tools-card ul { list-style: none; padding: 0; margin: 0; } .smart-tools-card ul li { color: var(--success); font-weight: 600; margin-bottom: 10px; position: relative; padding-left: 25px; font-size: 1rem; line-height: 1.6; } .smart-tools-card ul li::before { content: "\f00c"; font-family: "Font Awesome 6 Free"; font-weight: 900; color: var(--success); position: absolute; left: 0; top: 5px; font-size: 0.9em; }
+     .welcome-features-grid { display: flex; flex-wrap: wrap; gap: 2rem; justify-content: center; margin-bottom: 4rem; } .welcome-feature-card { background-color: white; border-radius: 12px; padding: 25px; flex: 1 1 280px; min-width: 250px; max-width: 350px; text-align: left; box-shadow: var(--card-shadow); transition: var(--transition); border-left: 5px solid; border-top: none; border-right: none; border-bottom: none; } .welcome-feature-card:hover { transform: translateY(-5px); box-shadow: var(--card-shadow-hover); } .welcome-feature-card h3 { color: var(--dark); margin-top: 0; margin-bottom: 15px; font-size: 1.2em; font-weight: 700; display: flex; align-items: center; gap: 8px; } .welcome-feature-card h3 i { font-size: 1.2em; } .welcome-feature-card ul { list-style: none; padding: 0; margin: 0; } .welcome-feature-card ul li { font-size: 0.95em; line-height: 1.7; color: var(--dark); font-weight: 500; margin-bottom: 8px; position: relative; padding-left: 20px; } .welcome-feature-card ul li::before { content: "•"; font-weight: bold; position: absolute; left: 0; top: 1px; } .welcome-feature-card.coming-soon { border-left-color: var(--warning); } .welcome-feature-card.coming-soon h3 i { color: var(--warning); } .welcome-feature-card.coming-soon ul li::before { color: var(--warning); } .welcome-feature-card.beta-features { border-left-color: var(--danger); } .welcome-feature-card.beta-features h3 i { color: var(--danger); } .welcome-feature-card.beta-features ul li::before { color: var(--danger); } .welcome-feature-card.login-benefits { border-left-color: var(--info); } .welcome-feature-card.login-benefits h3 i { color: var(--info); } .welcome-feature-card.login-benefits ul li::before { color: var(--info); }
+    .bottom-cta-section { background: var(--cta-bg); color: white; padding: 3rem 2rem; text-align: center; border-radius: 12px; margin: 2rem auto; max-width: 1100px; } .bottom-cta-section h2 { font-size: 2.4rem; font-weight: 700; margin-bottom: 0.5rem; line-height: 1.3; } .bottom-cta-section p { font-size: 1.2rem; margin-bottom: 2rem; opacity: 0.9; } .bottom-cta-section .welcome-start-btn { background: white; color: var(--primary); padding: 1rem 2.5rem; font-size: 1.1rem; font-weight: 700; border: none; border-radius: 0.6rem; cursor: pointer; transition: transform 0.2s ease; box-shadow: var(--card-shadow); } .bottom-cta-section .welcome-start-btn:hover { transform: scale(1.05); background-color: #f0f0f0; box-shadow: var(--card-shadow-hover); }
+
+    .progress-indicator { background: rgba(255, 255, 255, 0.05); padding: 6px 15px; border-radius: 8px; box-shadow: none; display: flex; align-items: center; font-weight: 600; color: var(--sidebar-text); margin: 5px 15px 5px; width: calc(100% - 30px); flex-shrink: 0; order: 3; }
+    .progress-indicator i { margin-right: 8px; color: var(--success); font-size: 1.0em; }
+    #feedback-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); justify-content: center; align-items: center; z-index: 1000; padding: 15px; } #feedback-modal .modal-content { background: #fff; padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; position: relative; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); text-align: center; }
+    #feedback-modal .modal-content h2 { margin-top: 0; margin-bottom: 15px; color: var(--dark); font-size: 1.6em; font-weight: 700; text-align: center; }
+    #feedback-modal .modal-content p { color: var(--gray); line-height: 1.6; text-align: center; margin-bottom: 25px; font-size: 0.95em; }
+    #feedback-modal .modal-content textarea {
+      width: 100%; height: 120px; margin: 0 0 25px; padding: 15px;
+      border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.95em;
+      transition: var(--transition); text-align: left;
+      font-family: inherit;
+    }
+    #feedback-modal .modal-content textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3); }
+    #feedback-modal .modal-content button { background: var(--accent); color: white; border: none; padding: 12px 25px; font-size: 1em; border-radius: 8px; cursor: pointer; transition: var(--transition); font-weight: 600; width: 100%; box-shadow: var(--card-shadow); }
+    #feedback-modal .modal-content button:hover { background: var(--success); transform: translateY(-2px); }
+
+    @media (max-width: 768px) {
+      body { overflow-y: auto; }
+      body.mobile-view #app-container { overflow: visible; }
+      #top-bar { padding: 0 10px; height: 60px; gap: 5px; }
+      #top-bar h1 { font-size: 1.1em; margin-right: 5px; flex-shrink: 1; }
+      #top-bar .email-container { gap: 5px; flex-shrink: 0; }
+      #top-bar .email-container input[type="email"] { min-width: 90px; max-width: 130px; font-size: 12px; padding: 5px 8px; flex-grow: 1; }
+      #top-bar .email-container button { padding: 5px 8px; font-size: 12px; min-width: 35px; flex-shrink: 0; }
+      #top-bar .email-container button.logout-button { min-width: auto; padding: 5px 10px; }
+      #top-bar .email-container span { display: none; }
+      body.mobile-view #sidebar { position: fixed; height: calc(100% - 60px); top: 60px; left: calc(-1 * var(--sidebar-width)); z-index: 1000; transition: left 0.3s ease; width: var(--sidebar-width); min-width: var(--sidebar-width); padding-bottom: 10px; overflow-y: auto; /* Allow scroll only on mobile */ }
+      body.mobile-view #sidebar.visible { left: 0; }
+      body.mobile-view #main-content { margin-left: 0 !important; height: auto; min-height: calc(100vh - 60px); overflow-y: visible; width: 100%; padding: 0; display: block; }
+      #search-bar { width: calc(100% - 30px); margin: 15px 15px 15px 15px; }
+      #category-title { margin: 0 15px 20px 15px; font-size: 1.6em; }
+      #problem-list { padding: 0 15px; }
+      #pagination-controls { padding: 20px 15px; }
+      #chat-container { margin-left: 15px; margin-right: 15px; margin-bottom: 15px; height: calc(100vh - 100px); }
+      body.mobile-view #sidebar-title-toggle-btn { display: none !important; }
+      body.mobile-view #sidebar h2 { justify-content: center; padding: 0 15px; margin-bottom: 15px; }
+      #mobile-sidebar-toggle { display: block; position: fixed; top: calc(60px + 10px); left: 10px; z-index: 1001; background: var(--primary); color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 50%; font-size: 1.2em; line-height: 1; transition: left 0.3s ease, transform 0.3s ease; box-shadow: var(--card-shadow); }
+      body.mobile-view #sidebar.visible ~ #mobile-sidebar-toggle { left: calc(var(--sidebar-width) - 45px); }
+      #content-overlay { display: none; position: fixed; top: 60px; left: 0; width: 100%; height: calc(100% - 60px); background: rgba(0, 0, 0, 0.4); z-index: 999; }
+      #content-overlay.visible { display: block; }
+      #problem-list { grid-template-columns: 1fr; }
+      #welcome-page .welcome-top-section { padding: 2rem 1.5rem 2rem; flex-direction: column; text-align: center; } #welcome-page .welcome-top-left { order: 1; text-align: center; max-width: none;} #welcome-page .welcome-top-left .welcome-main-title { font-size: 2.5em; } #welcome-page .welcome-top-left .welcome-subtitle { font-size: 1.1em; margin: 0 auto 1.5rem auto; max-width: 90%;} #welcome-page .welcome-top-left .welcome-start-btn { font-size: 1em; padding: 0.8rem 1.5rem;} #welcome-page .welcome-info-section { padding: 2rem 1.5rem; } #welcome-page .how-it-works-smart-tools-row { flex-direction: column; gap: 2rem; margin-bottom: 3rem; } #welcome-page .how-it-works-left h2, #welcome-page .smart-tools-card h3 { font-size: 1.5em; } #welcome-page .how-it-works-left ol li, #welcome-page .smart-tools-card ul li { font-size: 1em; } #welcome-page .smart-tools-card { padding: 1.2rem; } #welcome-page .welcome-features-grid { flex-direction: column; align-items: center; gap: 1.5rem; margin-bottom: 3rem; } #welcome-page .welcome-feature-card { width: 90%; max-width: 350px; } #welcome-page .bottom-cta-section { padding: 2.5rem 1.5rem; margin: 1rem auto; } #welcome-page .bottom-cta-section h2 { font-size: 1.8em; } #welcome-page .bottom-cta-section p { font-size: 1em; margin-bottom: 1.5rem; } #welcome-page .bottom-cta-section .welcome-start-btn { font-size: 1em; padding: 0.8rem 1.5rem; }
+      body.mobile-view #sidebar:not(.visible) .sidebar-button, body.mobile-view #sidebar:not(.visible) .progress-indicator { display: none; } body.mobile-view .progress-indicator { margin: 5px 15px 5px; width: calc(100% - 30px); }
+    }
+    @media (min-width: 769px) {
+      /* Hide mobile-only elements */
+      body:not(.mobile-view) #mobile-sidebar-toggle { display: none; }
+      body:not(.mobile-view) #content-overlay { display: none !important; }
+      /* Ensure desktop sidebar uses fixed width and is not collapsed */
+      body:not(.mobile-view) #sidebar {
+          width: var(--sidebar-width);
+          min-width: var(--sidebar-width);
+          left: 0; /* Ensure it's always visible */
+          position: relative; /* Or sticky if needed, but relative is fine in flex */
+          transition: none; /* No transition needed */
+          overflow-y: hidden; /* Prevent scrollbar on main sidebar */
+      }
+       /* Hide desktop collapse toggle button */
+      body:not(.mobile-view) #sidebar-title-toggle-btn { display: none !important; }
+       /* Ensure ul doesn't scroll */
+       body:not(.mobile-view) #sidebar ul { overflow-y: hidden; }
+    }
+  </style>
+</head>
+<body>
+  <div id="top-bar"> <h1>SAT Math Expl<span class="ai-red">AI</span>ner (Beta)</h1> <div class="email-container" id="emailWrapper"></div> </div>
+  <div id="app-container">
+    <div id="sidebar">
+      <h2> <!-- Removed toggle button --> <span>Categories</span> </h2>
+      <ul>
+        <li class="active" data-category="1">1. Extra-Difficult Problems</li>
+        <li data-category="2">2. Hard Problems</li>
+        <li class="category-group-header">Regular Problems:</li>
+        <li data-category="3">3. Algebra</li>
+        <li data-category="4">4. Advanced Math</li>
+        <li data-category="5">5. Problem-Solving and Data Analysis</li>
+        <li data-category="6">6. Geometry & Trigonometry</li>
+      </ul>
+      <button id="share-sidebar-btn" class="sidebar-button" onclick="shareApp()"> <i class="fas fa-share-alt"></i> <span>Share</span> </button>
+      <button id="show-welcome-btn" class="sidebar-button"> <i class="fas fa-home"></i> <span>Home</span> </button>
+      <div class="progress-indicator" id="progressIndicator"> <i class="fas fa-trophy"></i> <span id="progressText">0/0 solved</span> </div>
+      <!-- Removed desktop collapse toggle container -->
+      <!-- <div id="sidebar-toggle-container"> ... </div> -->
+    </div>
+    <div id="content-overlay"></div> <button id="mobile-sidebar-toggle"><i class="fas fa-bars"></i></button>
+    <div id="main-content">
+
+      <div id="welcome-page" style="display: block;">
+          <section class="welcome-top-section"> <div class="welcome-top-left"> <h1 class="welcome-main-title">SAT Math Expl<span class="ai-red">AI</span>ner (Beta)</h1> <p class="welcome-subtitle"> This AI-powered SAT Math Question Bank helps you understand problems faster than ever! It is currently in Beta and we need your input to improve this site! </p> <button class="welcome-start-btn" onclick="startPracticingFromWelcome()"> Start Practicing Now </button> </div> </section>
+          <div class="welcome-info-section">
+              <section class="how-it-works-smart-tools-row"> <div class="how-it-works-left"> <h2><i class="fas fa-lightbulb"></i>How It Works</h2> <ol> <li>Choose a topic from the sidebar</li> <li>Pick any problem and start solving it</li> <li>Select an answer or explanation. Or ask it a question</li> <li>Problems you've chatted with turn green. Go for 100%!</li> </ol> </div> <div class="smart-tools-card"> <h3><i class="fas fa-wand-magic-sparkles"></i>Smart Tools</h3> <p>Need simplified explanations? Get instant AI-powered solutions:</p> <ul> <li>Fast Time-Saving Hacks</li> <li>Step-by-Step Explanations</li> <li>Solve with Desmos Graphs</li> <li>Core Concept Breakdown</li> </ul> </div> </section>
+              <section class="welcome-features-grid"> <div class="welcome-feature-card coming-soon"> <h3><i class="fas fa-rocket"></i>Coming Soon</h3> <ul> <li>Problems with images and graphs</li> <li>New problem sets</li> <li>Upload your own questions</li> <li>New tools and practice modes</li> </ul> </div> <div class="welcome-feature-card beta-features"> <h3><i class="fas fa-flask"></i>Beta Features</h3> <ul> <li>Give feedback to improve the site</li> <li>Bug reports help us build faster</li> <li>Simple Email based login</li> </ul> </div> <div class="welcome-feature-card login-benefits"> <h3><i class="fas fa-envelope"></i>Login Benefits</h3> <ul> <li>Save your progress across devices</li> <li>Track your stats and achievements</li> <li>Never lose your place</li> </ul> </div> </section>
+          </div>
+           <section class="bottom-cta-section"> <h2>Ready to Improve Your SAT Math skills?</h2> <p>Start improving your score with custom simply-explained solutions!</p> <button class="welcome-start-btn" onclick="startPracticingFromWelcome()"> Show Math Problems </button> </section>
+      </div>
+
+      <input type="text" id="search-bar" placeholder="🔍 Search problems..." onkeyup="filterProblems()"> <h2 id="category-title"></h2> <div id="problem-list"></div> <div id="pagination-controls"></div>
+      <div id="chat-container"> <div class="chat-header"> <h3 id="chat-problem-title">Problem Chat</h3> <button class="exit-button" onclick="exitChat()"><i class="fas fa-times"></i> Exit</button> </div> <div id="chatbox"></div> <div class="input-container"> <input type="text" id="userInput" placeholder="Type your message or question..." onkeypress="handleEnter(event)" /> <button id="sendButton" onclick="sendMessage()"><i class="fas fa-paper-plane"></i> Send</button> </div> </div>
+    </div>
+  </div>
+
+  <div id="feedback-modal"> <div class="modal-content">
+    <h2>Feedback = Improvement 🚀</h2>
+    <p>We're making improvements right now based on user input. Before you continue, could you quickly share one thing you'd like added or fixed? Your idea could be the next big feature!</p> <textarea id="feedback-input" placeholder="e.g., 'Add a dark mode', 'Explain quadratic formula better', 'Problems aren’t loading'"></textarea> <button onclick="submitFeedback()">Submit & Continue Problem</button> </div> </div>
+
+
+  <script>
+    let userEmail = localStorage.getItem("user_email") || "";
+    let browserUserId = sessionStorage.getItem("chat_user_id");
+    if (!browserUserId) {
+      browserUserId = "user_" + Math.random().toString(36).substring(2, 15);
+      sessionStorage.setItem("chat_user_id", browserUserId);
+    }
+    let user_id = userEmail || browserUserId;
+    console.log(`[Client] Initial user_id = ${user_id} (Email: ${userEmail || 'None'}, BrowserID: ${browserUserId})`);
+    let pendingProblemId = null;
+    let currentProblemDbId = null;
+    let currentProblemIndex = null;
+    let currentCategory = "1";
+    let allProblemsInCategory = [];
+    let currentFilteredProblems = [];
+    let chattedProblemIds = new Set();
+    const PROBLEMS_PER_PAGE = 9;
+    let currentPage = 1;
+
+
+    function updateProgressIndicator() {
+      const totalProblems = allProblemsInCategory.length;
+      const solvedProblems = Array.from(chattedProblemIds)
+        .filter(id => allProblemsInCategory.some(p => p._id === id)).length;
+      const progressText = document.getElementById('progressText');
+      const progressContainer = document.getElementById('progressIndicator');
+
+      if (progressText && progressContainer) {
+        if (totalProblems > 0) {
+          progressText.textContent = `${solvedProblems}/${totalProblems} solved`;
+          progressContainer.style.display = 'flex';
+        } else {
+           // Simplified: always hide if no problems, regardless of collapsed state (since desktop isn't collapsible)
+           progressContainer.style.display = 'none';
+        }
+      }
+    }
+
+    function shareApp() {
+      if (navigator.share) {
+        navigator.share({
+          title: 'SAT Math ExplAIner',
+          text: 'Check out this awesome SAT math practice tool with AI explanations!',
+          url: window.location.href
+        }).catch(err => {
+          console.log('Error sharing:', err);
+          copyToClipboard();
+        });
+      } else {
+        copyToClipboard();
+      }
+    }
+
+    function copyToClipboard() {
+      const tempInput = document.createElement('input');
+      tempInput.value = window.location.href;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempInput);
+
+      const shareButton = document.getElementById('share-sidebar-btn');
+      const shareButtonSpan = shareButton?.querySelector('span');
+      if (shareButton && shareButtonSpan) {
+        const originalText = "Share";
+        shareButtonSpan.textContent = 'Link Copied!';
+        setTimeout(() => {
+          shareButtonSpan.textContent = originalText;
+        }, 2000);
+      } else {
+        alert('Link copied to clipboard! Share it with your friends.');
+      }
+    }
+
+    function generateNewId() {
+      const newId = "user_" + Math.random().toString(36).substring(2, 15);
+      sessionStorage.setItem("chat_user_id", newId);
+      return newId;
+    }
+
+    function updateEmailUI() {
+      const emailWrapper = document.getElementById("emailWrapper");
+      if (!emailWrapper) return;
+
+      if (userEmail) {
+        emailWrapper.innerHTML = `
+          <button class="logout-button" onclick="logout()">Log out</button>
+          <span>${userEmail}</span>
+        `;
+      } else {
+        const saveButtonContent = isMobile() ? '<i class="fas fa-save"></i>' : 'Save';
+        emailWrapper.innerHTML = `
+          <input type="email" id="userEmail" placeholder="Enter email to save progress" />
+          <button id="saveEmailButton">${saveButtonContent}</button>
+        `;
+        document.getElementById("saveEmailButton")?.addEventListener("click", saveEmail);
+        document.getElementById("userEmail")?.addEventListener("keypress", handleEmailEnter);
+      }
+    }
+
+    async function logout() {
+      console.log("[Client] Logging out");
+      userEmail = "";
+      localStorage.removeItem("user_email");
+      browserUserId = sessionStorage.getItem("chat_user_id") || generateNewId();
+      user_id = browserUserId;
+      console.log(`[Client] user_id reverted to browser ID: ${user_id}`);
+
+      updateEmailUI();
+      allProblemsInCategory = [];
+      currentFilteredProblems = [];
+      chattedProblemIds = new Set();
+      currentPage = 1;
+      await loadProblems(currentCategory);
+    }
+
+    function isMobile() {
+      return window.innerWidth <= 768;
+    }
+
+    // ==== START: Modified setSidebarState ====
+    function setSidebarState(visible) {
+      const sidebar = document.getElementById('sidebar');
+      const mobileToggleBtn = document.getElementById('mobile-sidebar-toggle');
+      const overlay = document.getElementById('content-overlay');
+
+      if (!sidebar || !overlay) return;
+
+      const isCurrentlyMobile = isMobile();
+
+      // Apply mobile-view class (doesn't change often)
+      if (document.body.classList.contains('mobile-view') !== isCurrentlyMobile) {
+           document.body.classList.toggle('mobile-view', isCurrentlyMobile);
+       }
+
+      if (isCurrentlyMobile) {
+        // Mobile: Use 'visible' class and overlay
+        sidebar.classList.toggle('visible', visible);
+        overlay.classList.toggle('visible', visible);
+        if (mobileToggleBtn) {
+          mobileToggleBtn.innerHTML = visible ? '<i class="fas fa-times"></i>' : '<i class="fas fa-bars"></i>';
+        }
+        overlay.style.pointerEvents = visible ? 'auto' : 'none';
+        // Remove collapsed class if present (shouldn't be, but safe)
+        sidebar.classList.remove('collapsed');
+      } else {
+        // Desktop: Always visible, never collapsed, no overlay/mobile button changes
+        sidebar.classList.remove('visible'); // Ensure mobile class is off
+        sidebar.classList.remove('collapsed'); // Ensure collapsed class is off
+        overlay.classList.remove('visible');
+        overlay.style.pointerEvents = 'none';
+        // No need to save collapsed state as it's always expanded
+      }
+    }
+     // ==== END: Modified setSidebarState ====
+
+    function toggleSidebar() {
+       // Only toggle matters for mobile now
+      if (isMobile()) {
+         const sidebar = document.getElementById('sidebar');
+         if (!sidebar) return;
+         const isCurrentlyVisible = sidebar.classList.contains('visible');
+         setSidebarState(!isCurrentlyVisible);
+      }
+      // Do nothing on desktop as toggle buttons are hidden
+    }
+
+    function handleEmailEnter(event) {
+      if (event.key === "Enter") {
+        saveEmail();
+      }
+    }
+
+    async function saveEmail() {
+      const emailInput = document.getElementById("userEmail");
+      if (!emailInput) return;
+
+      const emailValue = emailInput.value.trim();
+      if (!/^\S+@\S+\.\S+$/.test(emailValue)) {
+        alert("Please enter a valid email address.");
+        return;
+      }
+
+      userEmail = emailValue;
+      user_id = userEmail;
+      localStorage.setItem("user_email", userEmail);
+      console.log(`[Client] Email saved. user_id set to: ${user_id}`);
+
+      updateEmailUI();
+      await loadUserState(userEmail);
+    }
+
+    async function loadUserState(email) {
+      console.log(`[Client] Loading user state for ${email}`);
+      currentPage = 1;
+
+      try {
+        const resp = await fetch("/api/email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email, user_id: browserUserId }),
+        });
+        const data = await resp.json();
+
+        if (data.success && data.chattedProblemIds) {
+          console.log(`[Client] Received chatted problem IDs: ${data.chattedProblemIds.length}`);
+          chattedProblemIds = new Set(data.chattedProblemIds);
+        } else {
+          console.warn("[Client] No chatted problem IDs received:", data.note || 'Unknown error');
+          chattedProblemIds = new Set();
+        }
+      } catch (err) {
+        console.error("[Client] Error loading user state:", err);
+        chattedProblemIds = new Set();
+      }
+
+      await loadProblems(currentCategory);
+      updateProgressIndicator();
+    }
+
+    function showAppContent() {
+      const welcomePage = document.getElementById('welcome-page');
+      if (welcomePage) welcomePage.style.display = 'none';
+      document.getElementById('search-bar')?.style.setProperty('display', 'block', 'important');
+      document.getElementById('category-title')?.style.setProperty('display', 'block', 'important');
+      document.getElementById('problem-list')?.style.setProperty('display', 'grid', 'important');
+      document.getElementById('pagination-controls')?.style.setProperty('display', 'flex', 'important');
+    }
+
+    function startPracticingFromWelcome() {
+      showAppContent();
+
+      const algebraCategoryItem = document.querySelector('#sidebar ul li[data-category="3"]');
+      if (algebraCategoryItem) {
+        algebraCategoryItem.click();
+      } else {
+        console.warn("Could not find Algebra category item to click.");
+        // No need to adjust sidebar state here for desktop, it's always expanded
+      }
+
+      const storage = userEmail ? localStorage : sessionStorage;
+      storage.setItem('hasVisitedBefore', 'true');
+    }
+
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      console.log("[Client] DOMContentLoaded event.");
+      updateEmailUI();
+
+      const storage = userEmail ? localStorage : sessionStorage;
+      const hasVisitedBefore = storage.getItem('hasVisitedBefore');
+      const welcomePage = document.getElementById('welcome-page');
+      const mainContent = document.getElementById('main-content');
+
+      if (!welcomePage || !mainContent) {
+        console.error("Core elements missing (welcome page or main content)!");
+        return;
+      }
+
+      let initialSidebarVisible;
+
+      if (!hasVisitedBefore) {
+        welcomePage.style.display = 'block';
+        document.getElementById('search-bar')?.style.setProperty('display', 'none', 'important');
+        document.getElementById('category-title')?.style.setProperty('display', 'none', 'important');
+        document.getElementById('problem-list')?.style.setProperty('display', 'none', 'important');
+        document.getElementById('pagination-controls')?.style.setProperty('display', 'none', 'important');
+        document.getElementById('chat-container')?.style.setProperty('display', 'none', 'important');
+        // Mobile hidden, Desktop visible (always)
+        initialSidebarVisible = !isMobile();
+      } else {
+        welcomePage.style.display = 'none';
+        showAppContent();
+        // Mobile hidden, Desktop visible (always)
+        initialSidebarVisible = !isMobile();
+        if (userEmail) {
+          await loadUserState(userEmail);
+        } else {
+          currentPage = 1;
+          await loadProblems("1");
+        }
+      }
+      // Apply the determined initial state (handles both mobile/desktop)
+      setSidebarState(initialSidebarVisible);
+
+
+      document.getElementById('show-welcome-btn')?.addEventListener('click', () => {
+        exitChat();
+        if (welcomePage) welcomePage.style.display = 'block';
+        document.getElementById('search-bar')?.style.setProperty('display', 'none', 'important');
+        document.getElementById('category-title')?.style.setProperty('display', 'none', 'important');
+        document.getElementById('problem-list')?.style.setProperty('display', 'none', 'important');
+        document.getElementById('pagination-controls')?.style.setProperty('display', 'none', 'important');
+        document.getElementById('chat-container')?.style.setProperty('display', 'none', 'important');
+        // Set sidebar state appropriately when going home
+        setSidebarState(!isMobile()); // Visible on desktop, hidden on mobile
+        currentProblemDbId = null;
+      });
+
+      document.querySelectorAll("#sidebar ul li:not(.category-group-header)").forEach(li => {
+        li.addEventListener("click", async (event) => {
+          showAppContent();
+          document.querySelectorAll("#sidebar ul li").forEach(l => l.classList.remove("active"));
+          li.classList.add("active");
+          exitChat();
+          currentCategory = li.getAttribute("data-category");
+          currentPage = 1;
+          await loadProblems(currentCategory);
+          if (isMobile()) {
+            setSidebarState(false); // Close mobile sidebar after selection
+          }
+        });
+      });
+
+      document.getElementById('content-overlay')?.addEventListener('click', () => setSidebarState(false)); // Mobile only
+
+      document.getElementById('mobile-sidebar-toggle')?.addEventListener('click', toggleSidebar); // Mobile only
+      // Removed listeners for desktop-only toggle buttons
+      // document.getElementById('sidebar-toggle-btn')?.addEventListener('click', toggleSidebar);
+      // document.getElementById('sidebar-title-toggle-btn')?.addEventListener('click', toggleSidebar);
+
+      // ==== START: Reworked Resize Listener ====
+      let lastKnownWidth = window.innerWidth; // Track width
+
+      window.addEventListener('resize', () => {
+          const currentWidth = window.innerWidth;
+          const currentMobileState = isMobile(); // Check if currently mobile width
+
+          // Update mobile-view class based on width change across threshold
+          if ((lastKnownWidth <= 768 && currentWidth > 768) || (lastKnownWidth > 768 && currentWidth <= 768)) {
+              document.body.classList.toggle('mobile-view', currentMobileState);
+
+               // Determine desired sidebar state based on the *new* mode
+               let shouldBeVisible = !currentMobileState; // Visible on desktop, hidden on mobile by default on mode change
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar && currentMobileState && sidebar.classList.contains('visible')) {
+                    // If transitioning to mobile and sidebar was somehow visible, keep it visible? Or close? Let's close.
+                    shouldBeVisible = false;
+                }
+                setSidebarState(shouldBeVisible);
+
+          } else {
+              // If width didn't cross the threshold, only call setSidebarState IF on mobile
+              // to potentially adjust the overlay/button if the state was changed externally.
+              // This prevents keyboard height changes from affecting desktop sidebar state.
+              if(currentMobileState) {
+                  const sidebar = document.getElementById('sidebar');
+                  if(sidebar) {
+                      setSidebarState(sidebar.classList.contains('visible'));
+                  }
+              }
+              // On desktop, if width didn't cross threshold, do nothing regarding sidebar state.
+          }
+
+
+          updateEmailUI(); // Update button content if needed
+          lastKnownWidth = currentWidth; // Update tracked width
+      });
+      // ==== END: Reworked Resize Listener ====
+
+
+      const userInput = document.getElementById('userInput');
+      if (userInput) {
+        userInput.addEventListener('focus', () => {
+          if (isMobile()) {
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar && sidebar.classList.contains('visible')) {
+              console.log("[Mobile] Chat input focused, ensuring sidebar is closed.");
+              setSidebarState(false);
+            }
+          }
+        });
+      }
+
+      if (!navigator.share) {
+        const shareIcon = document.querySelector('#share-sidebar-btn i');
+        if (shareIcon) shareIcon.className = 'fas fa-link';
+      }
+    });
+
+    document.addEventListener("click", e => {
+      const clickableOption = e.target.closest(".clickable-option");
+      const answerOption = e.target.closest(".answer-option");
+
+      if (clickableOption && !clickableOption.classList.contains("disabled")) {
+        const command = clickableOption.getAttribute("data-command");
+        if (command) {
+          document.getElementById("userInput").value = command;
+          sendMessage();
+        } else {
+          console.warn("Clicked .clickable-option missing data-command:", clickableOption);
+        }
+      }
+      else if (answerOption && !answerOption.classList.contains("disabled")) {
+        const choice = answerOption.getAttribute("data-choice");
+        if (choice) {
+          document.getElementById("userInput").value = choice;
+          sendMessage();
+        } else {
+          console.warn("Clicked .answer-option missing data-choice:", answerOption);
+        }
+      }
+    });
+
+    const feedbackModalElement = document.getElementById('feedback-modal');
+    const feedbackInputElement = document.getElementById('feedback-input');
+    if (feedbackInputElement && feedbackModalElement) {
+      feedbackInputElement.addEventListener('keydown', function(event) {
+        const isModalVisible = window.getComputedStyle(feedbackModalElement).display === 'flex';
+        if (event.key === 'Enter' && !event.shiftKey && isModalVisible) {
+          event.preventDefault();
+          if (typeof submitFeedback === 'function') {
+            submitFeedback();
+          }
+        }
+      });
+    }
+
+
+    async function loadConversation(problem_db_id) {
+      if (!problem_db_id) return [];
+
+      try {
+        const response = await fetch(`/api/history?user_id=${encodeURIComponent(user_id)}&problem_id=${encodeURIComponent(problem_db_id)}`);
+        if (!response.ok) {
+          console.error("Failed to fetch conversation:", response.statusText);
+          return [];
+        }
+        const data = await response.json();
+        return data.conversation || [];
+      } catch (err) {
+        console.error("[Client] Error loading conversation:", err);
+        return [];
+      }
+    }
+
+    function appendMessage(role, text) {
+      const chatbox = document.getElementById("chatbox");
+      if (!chatbox) return;
+
+      const p = document.createElement("p");
+
+      if (role === "user") {
+        p.classList.add("user-message");
+        p.textContent = text;
+      } else {
+        p.classList.add("bot-message");
+        let processed = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+        processed = processed.replace(/https:\/\/www\.desmos\.com\/testing\/cb-digital-sat\/graphing/g, '<a href="https://www.desmos.com/testing/cb-digital-sat/graphing" target="_blank" rel="noopener noreferrer">https://www.desmos.com/testing/cb-digital-sat/graphing</a>');
+        processed = transformToClickableOptions(processed);
+        processed = transformAnswerChoices(processed);
+        processed = processed.replace(/### (.*?)(?=\n|$)/g, "<h3>$1</h3>");
+        p.innerHTML = processed;
+
+        p.querySelectorAll('pre code').forEach(block => {
+          const parent = block.closest('.code-block, .code-block-generic');
+          if (parent && !parent.querySelector('.copy-button')) {
+            const button = document.createElement('button');
+            button.className = 'copy-button';
+            button.textContent = 'Copy';
+            button.onclick = () => copyCode(button);
+            parent.style.position = 'relative';
+            parent.insertBefore(button, parent.firstChild);
+          }
+        });
+
+        const allMessages = Array.from(chatbox.children);
+        const lastMessageElement = allMessages.length > 0 ? allMessages[allMessages.length - 1] : null;
+
+        if (lastMessageElement && lastMessageElement.classList.contains('user-message')) {
+          const lastUserMessageText = lastMessageElement.textContent.trim();
+          if (['7', '8', '9', '10'].includes(lastUserMessageText)) {
+            const correspondingButton = p.querySelector(`.clickable-option[data-command="${lastUserMessageText}"]`);
+            if (correspondingButton) {
+              console.log(`[Client] Disabling immediate re-click for option: ${lastUserMessageText}`);
+              correspondingButton.classList.add('disabled');
+              correspondingButton.title = "Option recently processed";
+            }
+          }
+        }
+      }
+
+      chatbox.appendChild(p);
+      scrollToBottom(chatbox);
+
+      setTimeout(() => {
+        if (typeof renderMath === "function") {
+          try {
+            renderMath(p);
+          } catch (e) {
+            console.error("Error rendering KaTeX:", e);
+          }
+        }
+        if (role !== 'user') {
+          disableAllOlderButtons();
+        }
+      }, 50);
+    }
+
+    function scrollToBottom(element = document.getElementById("chatbox")) {
+      if (element) {
+        element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
+      }
+    }
+
+    function scrollToTop(element = document.getElementById("chatbox")) {
+      if (element) {
+        element.scrollTo({ top: 0, behavior: 'auto' });
+      }
+    }
+
+    function handleEnter(event) {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    }
+
+    async function sendMessage() {
+      const userInputElem = document.getElementById("userInput");
+      const userMessage = userInputElem.value.trim();
+
+      if (!userMessage || !currentProblemDbId) return;
+
+      const isFirstUserMsgForThisProblem = !chattedProblemIds.has(currentProblemDbId);
+      userInputElem.value = "";
+
+      appendMessage("user", userMessage);
+      disableAllOlderButtons();
+
+      if (isFirstUserMsgForThisProblem) {
+        chattedProblemIds.add(currentProblemDbId);
+        const card = findProblemCard(currentProblemDbId);
+        if (card) card.classList.add('chatted');
+        updateProgressIndicator();
+      }
+
+      const chatbox = document.getElementById("chatbox");
+      const loading = document.createElement("p");
+      loading.classList.add("bot-message", "loading-message");
+      loading.innerText = "Generating response...";
+      chatbox.appendChild(loading);
+      scrollToBottom(chatbox);
+
+      let streamErrorOccurred = false;
+      let feedbackTriggered = false;
+      let streamEndedGracefully = false;
+
+      try {
+        const response = await fetch("/api/assistant", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id,
+            message: userMessage,
+            problem_id: currentProblemDbId,
+            selectedProblemId: null
+          }),
+        });
+
+        if (!response.ok || !response.body) {
+          throw new Error(`Server error: ${response.statusText}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let partialText = "";
+        const loadingMessageElement = chatbox.querySelector(".loading-message:last-child");
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+             streamEndedGracefully = true;
+             break;
+          }
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n\n");
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+
+            const raw = line.slice("data: ".length).trim();
+            if (!raw) continue;
+
+            if (raw === "[ERROR]") {
+              streamErrorOccurred = true;
+              if (loadingMessageElement) loadingMessageElement.innerText = "Error generating response.";
+              scrollToBottom(chatbox);
+              break;
+            }
+
+            if (streamErrorOccurred) continue;
+
+            try {
+              const token = JSON.parse(raw);
+
+              if (token === "") {
+                feedbackTriggered = true;
+                if (loadingMessageElement) loadingMessageElement.remove();
+                pendingProblemId = {
+                    dbId: currentProblemDbId,
+                    index: currentProblemIndex,
+                    lastUserMessage: userMessage
+                };
+                console.log("Feedback trigger received:", pendingProblemId);
+                showFeedbackModal();
+                 break;
+              }
+
+              if (feedbackTriggered) continue;
+
+              partialText += token;
+
+              if (loadingMessageElement) {
+                let tempProcessed = partialText.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+                                              .replace(/### (.*?)(?=\n|$)/g, "<h3>$1</h3>");
+                tempProcessed = transformToClickableOptions(tempProcessed);
+                tempProcessed = transformAnswerChoices(tempProcessed);
+                loadingMessageElement.innerHTML = tempProcessed;
+                if (typeof renderMath === 'function') {
+                  try { renderMath(loadingMessageElement); } catch (e) { }
+                }
+                scrollToBottom(chatbox);
+              }
+            } catch (parseError) {
+              console.error("Error parsing SSE data:", parseError, "Raw:", raw);
+              streamErrorOccurred = true;
+              if (loadingMessageElement) loadingMessageElement.innerText = "Error receiving response stream.";
+               break;
+            }
+          }
+          if (streamErrorOccurred || feedbackTriggered) break;
+        }
+
+        const finalLoadingMessageElement = chatbox.querySelector(".loading-message:last-child");
+
+        if (finalLoadingMessageElement) {
+             finalLoadingMessageElement.remove();
+        }
+
+        if (feedbackTriggered) {
+            console.log("[Client] Stream ended, feedback triggered.");
+        } else if (streamErrorOccurred) {
+             console.log("[Client] Stream ended, error was signalled.");
+             if (!chatbox.textContent.includes("Error generating response") && !chatbox.textContent.includes("Error receiving response stream")) {
+                  appendMessage("assistant", "An error occurred while generating the response.");
+             }
+        } else if (!streamEndedGracefully && partialText.length === 0) {
+            console.warn("[Client] Stream ended unexpectedly without sending any text.");
+            appendMessage("assistant", "The request timed out or failed before starting. Please try again.");
+        } else if (!streamEndedGracefully && partialText.length > 0) {
+             console.warn("[Client] Stream ended unexpectedly after sending partial text.");
+             appendMessage("assistant", partialText + "\n\n**(Warning: The response may be incomplete due to a timeout or network issue.)**");
+        } else if (streamEndedGracefully && partialText.length > 0) {
+            console.log("[Client] Stream ended gracefully.");
+            appendMessage("assistant", partialText);
+        } else if (streamEndedGracefully && partialText.length === 0) {
+             console.warn("[Client] Stream ended gracefully but sent no text.");
+        }
+
+      } catch (err) {
+        console.error("[Client] Error sending/receiving message (fetch level):", err);
+        const loadingMessageElement = chatbox.querySelector(".loading-message:last-child");
+        if (loadingMessageElement) {
+          loadingMessageElement.innerText = "Network error or server unavailable.";
+          loadingMessageElement.classList.remove("loading-message");
+        } else {
+          appendMessage("assistant", "Network error or server unavailable.");
+        }
+        scrollToBottom(chatbox);
+      }
+    }
+
+
+    function transformToClickableOptions(rawText) {
+      const lines = rawText.split('\n');
+      const processedLines = lines.map(line => {
+        const explanationMatch = line.match(/^(\s*)([7-9]|10)\.\s+(.*)/);
+        if (explanationMatch) {
+          const leadingSpace = explanationMatch[1];
+          const commandNumber = explanationMatch[2];
+          const commandText = explanationMatch[3];
+          return `${leadingSpace}<span class="clickable-option" data-command="${commandNumber}">${commandNumber}. ${commandText}</span>`;
+        }
+        return line;
+      });
+      return processedLines.join('\n');
+    }
+
+    function transformAnswerChoices(rawText) {
+      const lines = rawText.split('\n');
+      const processedLines = lines.map(line => {
+        const answerMatch = line.match(/^(\s*)([A-Da-d])([.)])\s+(.*)/);
+        if (answerMatch) {
+          const leadingSpace = answerMatch[1];
+          const letter = answerMatch[2].toUpperCase();
+          const separator = answerMatch[3];
+          const choiceText = answerMatch[4];
+          return `${leadingSpace}<span class="answer-option" data-choice="${letter}">${letter}${separator} ${choiceText}</span>`;
+        }
+        return line;
+      });
+      return processedLines.join('\n');
+    }
+
+    function disableAllOlderButtons() {
+      const chatbox = document.getElementById("chatbox");
+      if (!chatbox) return;
+
+      const userMessages = chatbox.querySelectorAll(".user-message");
+      const sentCommandsOrChoices = new Set();
+      userMessages.forEach(msg => {
+        sentCommandsOrChoices.add(msg.textContent.trim());
+      });
+
+      const allBotButtons = chatbox.querySelectorAll(".bot-message .clickable-option, .bot-message .answer-option");
+
+      allBotButtons.forEach(button => {
+        if (button.classList.contains('disabled') && button.title === "Option recently processed") {
+          return;
+        }
+
+        const command = button.getAttribute("data-command");
+        const choice = button.getAttribute("data-choice");
+        const buttonValue = command || choice;
+
+        if (buttonValue && sentCommandsOrChoices.has(buttonValue)) {
+          if (!button.classList.contains('disabled')) {
+            button.classList.add("disabled");
+            button.title = "Option already used in this chat";
+          }
+        } else {
+          if (!button.title || button.title !== "Option recently processed") {
+             button.classList.remove("disabled");
+             button.title = "";
+          }
+        }
+      });
+    }
+
+    function findProblemCard(problemDbId) {
+      return document.querySelector(`.problem-card[data-problem-id="${problemDbId}"]`);
+    }
+
+
+    async function loadChat(problemDbId, globalProblemIndex) {
+      console.log(`[Client] Loading chat for problem DB ID: ${problemDbId}, Global Index: ${globalProblemIndex}`);
+      const chatContainer = document.getElementById("chat-container");
+      const chatbox = document.getElementById("chatbox");
+      const problemTitle = document.getElementById("chat-problem-title");
+      const userInput = document.getElementById('userInput');
+
+      if (!chatContainer || !chatbox || !problemTitle || !userInput) {
+        console.error("Required chat elements not found!");
+        return;
+      }
+
+      if (isMobile()) {
+        setSidebarState(false);
+      }
+
+      if (currentProblemDbId && chattedProblemIds.has(currentProblemDbId)) {
+        const prevCard = findProblemCard(currentProblemDbId);
+        if (prevCard && !prevCard.classList.contains('chatted')) {
+          prevCard.classList.add('chatted');
+        }
+      }
+
+      chatbox.innerHTML = "";
+      scrollToTop(chatbox);
+      chatContainer.style.display = "flex";
+
+      currentProblemDbId = problemDbId;
+      currentProblemIndex = globalProblemIndex;
+      problemTitle.textContent = `Problem ${globalProblemIndex + 1}`;
+
+      const scrollPageToInputView = () => {
+        userInput.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        if (!isMobile()) {
+          setTimeout(() => { userInput.focus(); }, 300);
+        }
+      };
+
+      const existingConversation = await loadConversation(problemDbId);
+
+      if (existingConversation.length > 0) {
+        console.log(`[Client] Found ${existingConversation.length} messages for ${problemDbId}.`);
+        const conversationToDisplay = existingConversation.filter((msg, index) => {
+            const isInitialCommand = /^(Load Problem \d+)$/.test(msg.content.trim());
+            return !(msg.role === 'user' && isInitialCommand && index === 0);
+        });
+
+        conversationToDisplay.forEach(msg => appendMessage(msg.role, msg.content));
+
+        if (!chattedProblemIds.has(problemDbId)) {
+             chattedProblemIds.add(problemDbId);
+             const card = findProblemCard(problemDbId);
+             if (card) card.classList.add('chatted');
+             updateProgressIndicator();
+        }
+
+        setTimeout(() => {
+            disableAllOlderButtons();
+            scrollToBottom(chatbox);
+            requestAnimationFrame(scrollPageToInputView);
+        }, 100);
+
+      } else {
+        console.log(`[Client] No history for ${problemDbId}. Initiating chat.`);
+        const loading = document.createElement("p");
+        loading.classList.add("bot-message", "loading-message");
+        loading.innerText = "Loading problem...";
+        chatbox.appendChild(loading);
+        scrollToBottom(chatbox);
+
+        let initialStreamErrorOccurred = false;
+        let initialFeedbackTriggered = false;
+        let initialStreamEndedGracefully = false;
+
+        try {
+          const response = await fetch("/api/assistant", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              user_id,
+              message: `Load Problem ${globalProblemIndex + 1}`,
+              problem_id: problemDbId,
+              selectedProblemId: problemDbId
+            }),
+          });
+
+          if (!response.ok || !response.body) {
+             throw new Error(`Server error: ${response.statusText}`);
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder("utf-8");
+          let fullResponse = "";
+          const loadingMessageElement = chatbox.querySelector(".loading-message:last-child");
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+                initialStreamEndedGracefully = true;
+                break;
+            }
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split("\n\n");
+
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              const raw = line.slice("data: ".length).trim();
+              if (!raw) continue;
+              if (raw === "[ERROR]") {
+                 initialStreamErrorOccurred = true;
+                if (loadingMessageElement) loadingMessageElement.innerText = "Error loading problem details.";
+                scrollToBottom(chatbox);
+                 break;
+              }
+
+              if (initialStreamErrorOccurred) continue;
+
+              try {
+                const token = JSON.parse(raw);
+                if (token === "") {
+                  initialFeedbackTriggered = true;
+                  console.log("[Client] Feedback trigger during initial load.");
+                  if (loadingMessageElement) loadingMessageElement.remove();
+                  pendingProblemId = {
+                      dbId: problemDbId,
+                      index: globalProblemIndex,
+                      lastUserMessage: `Load Problem ${globalProblemIndex + 1}`
+                  };
+                  showFeedbackModal();
+                   break;
+                }
+
+                if (initialFeedbackTriggered) continue;
+
+                fullResponse += token;
+                if (loadingMessageElement) {
+                  let tempProcessed = fullResponse.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+                                                .replace(/### (.*?)(?=\n|$)/g, "<h3>$1</h3>");
+                  tempProcessed = transformToClickableOptions(tempProcessed);
+                  tempProcessed = transformAnswerChoices(tempProcessed);
+                  loadingMessageElement.innerHTML = tempProcessed;
+                  if (typeof renderMath === 'function') {
+                    try { renderMath(loadingMessageElement); } catch (e) { }
+                  }
+                  scrollToBottom(chatbox);
+                }
+              } catch (parseError) {
+                 initialStreamErrorOccurred = true;
+                console.error("Error parsing SSE data during load:", parseError, "Raw:", raw);
+                if (loadingMessageElement) loadingMessageElement.innerText = "Error receiving problem details.";
+                 break;
+              }
+            }
+             if (initialStreamErrorOccurred || initialFeedbackTriggered) break;
+          }
+
+           const finalInitialLoadingMsg = chatbox.querySelector(".loading-message:last-child");
+           if (finalInitialLoadingMsg) finalInitialLoadingMsg.remove();
+
+           if (initialFeedbackTriggered) {
+                console.log("[Client] Initial load stream ended, feedback triggered.");
+           } else if (initialStreamErrorOccurred) {
+                console.log("[Client] Initial load stream ended, error was signalled.");
+                if (!chatbox.textContent.includes("Error loading problem details") && !chatbox.textContent.includes("Error receiving problem details")) {
+                     appendMessage("assistant", "An error occurred while loading the problem.");
+                }
+           } else if (!initialStreamEndedGracefully) {
+                console.warn("[Client] Initial load stream ended unexpectedly.");
+                appendMessage("assistant", "Problem loading failed or timed out. Please try again.");
+           } else if (fullResponse) {
+               console.log("[Client] Initial load stream ended gracefully.");
+               appendMessage("assistant", fullResponse);
+               setTimeout(() => {
+                 scrollToTop(chatbox);
+                 requestAnimationFrame(scrollPageToInputView);
+               }, 100);
+           } else {
+                console.warn("[Client] Initial load stream ended gracefully but sent no text.");
+                 appendMessage("assistant", "Failed to load problem content. Please try again.");
+           }
+
+        } catch (err) {
+          console.error("[Client] Error initiating chat (fetch level):", err);
+          const loadingMessageElement = chatbox.querySelector(".loading-message:last-child");
+          if (loadingMessageElement) {
+            loadingMessageElement.innerText = "Error loading problem. Server may be unavailable.";
+            loadingMessageElement.classList.remove("loading-message");
+          } else {
+            appendMessage("assistant", "Error loading problem. Server may be unavailable.");
+          }
+          scrollToBottom(chatbox);
+        }
+      }
+    }
+
+
+    function showFeedbackModal() {
+      const modal = document.getElementById("feedback-modal");
+      if (modal) {
+        modal.style.display = "flex";
+        setTimeout(() => {
+          document.getElementById("feedback-input")?.focus();
+        }, 100);
+      } else {
+        console.error("Feedback modal element not found!");
+      }
+    }
+
+    async function submitFeedback() {
+      const feedbackInput = document.getElementById("feedback-input");
+      const feedbackText = feedbackInput.value.trim();
+
+      if (!feedbackText) {
+        alert("Please provide some feedback before continuing.");
+        return;
+      }
+
+      console.log("[Client] Submitting feedback:", feedbackText);
+
+      try {
+        const response = await fetch("/api/feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id, feedback: feedbackText }),
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          console.log("[Client] Feedback submitted successfully.");
+          const modal = document.getElementById("feedback-modal");
+          if (modal) modal.style.display = "none";
+          feedbackInput.value = "";
+
+          if (pendingProblemId) {
+            console.log("[Client] Resuming pending action for problem:", pendingProblemId);
+            const { dbId, index, lastUserMessage } = pendingProblemId;
+            pendingProblemId = null;
+
+            const isInitialLoad = /^(Load Problem \d+)$/.test(lastUserMessage.trim());
+
+            if (dbId && index !== null) {
+              if (isInitialLoad) {
+                await loadChat(dbId, index);
+              } else {
+                console.log("[Client] Resending last user message after feedback:", lastUserMessage);
+                document.getElementById('userInput').value = lastUserMessage;
+                await sendMessage();
+              }
+            } else {
+              console.warn("[Client] Pending action lacked necessary info (dbId or index). Cannot resume.");
+            }
+          } else {
+            console.log("[Client] No pending action to resume after feedback.");
+          }
+        } else {
+          console.error("[Client] Error submitting feedback:", data.message || "Unknown error");
+          alert("Error submitting feedback. Please try again.");
+        }
+      } catch (err) {
+        console.error("[Client] Network error submitting feedback:", err);
+        alert("Network error submitting feedback. Please check your connection and try again.");
+      }
+    }
+
+    function renderProblemPage(problemsToRender) {
+      const problemList = document.getElementById("problem-list");
+      if (!problemList) return;
+
+      problemList.innerHTML = "";
+
+      if (!problemsToRender || problemsToRender.length === 0) {
+        problemList.innerHTML = "<p>No problems found for this page or filter.</p>";
+        return;
+      }
+
+      problemsToRender.forEach((problem) => {
+        const globalIndex = allProblemsInCategory.findIndex(p => p._id === problem._id);
+        if (globalIndex === -1) {
+          console.warn(`Problem ID ${problem._id} not found in allProblemsInCategory.`);
+          return;
+        }
+
+        const problemCard = document.createElement("div");
+        problemCard.className = "problem-card" + (chattedProblemIds.has(problem._id) ? " chatted" : "");
+
+        let formattedText = problem.text || '';
+        formattedText = formattedText.replace(/\r\n/g, '\n').replace(/\n/g, '<br>').replace(/(<br>\s*){3,}/g, '<br><br>');
+
+        problemCard.innerHTML = `
+          <h3>Problem ${globalIndex + 1}</h3>
+          <div class="problem-text">${formattedText}</div>
+        `;
+        problemCard.setAttribute("data-problem-id", problem._id);
+        problemCard.onclick = () => loadChat(problem._id, globalIndex);
+
+        problemList.appendChild(problemCard);
+      });
+
+      setTimeout(() => {
+        if (typeof renderMath === "function") {
+          try {
+            renderMath(problemList);
+          } catch (e) {
+            console.error("Error rendering MathJax/KaTeX in problem list:", e);
+          }
+        }
+      }, 50);
+    }
+
+    function renderPaginationControls(totalProblems) {
+      const paginationControls = document.getElementById("pagination-controls");
+      if (!paginationControls) return;
+
+      paginationControls.innerHTML = "";
+      const totalPages = Math.ceil(totalProblems / PROBLEMS_PER_PAGE);
+
+      if (totalPages <= 1) {
+        paginationControls.style.display = 'none';
+        return;
+      }
+
+      paginationControls.style.display = 'flex';
+
+      const prevButton = document.createElement("button");
+      prevButton.innerHTML = '<i class="fas fa-chevron-left"></i> Previous';
+      prevButton.disabled = currentPage === 1;
+      prevButton.onclick = () => changePage(currentPage - 1);
+      paginationControls.appendChild(prevButton);
+
+      const pageInfo = document.createElement("span");
+      pageInfo.id = "pagination-info";
+      pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+      paginationControls.appendChild(pageInfo);
+
+      const nextButton = document.createElement("button");
+      nextButton.innerHTML = 'Next <i class="fas fa-chevron-right"></i>';
+      nextButton.disabled = currentPage === totalPages;
+      nextButton.onclick = () => changePage(currentPage + 1);
+      paginationControls.appendChild(nextButton);
+    }
+
+    function changePage(newPage) {
+      const totalPages = Math.ceil(currentFilteredProblems.length / PROBLEMS_PER_PAGE);
+      if (newPage < 1 || newPage > totalPages) return;
+
+      currentPage = newPage;
+      const startIndex = (currentPage - 1) * PROBLEMS_PER_PAGE;
+      const endIndex = startIndex + PROBLEMS_PER_PAGE;
+      const problemsForPage = currentFilteredProblems.slice(startIndex, endIndex);
+
+      renderProblemPage(problemsForPage);
+      renderPaginationControls(currentFilteredProblems.length);
+
+      document.getElementById("main-content")?.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function loadProblems(category) {
+      console.log(`[Client] Loading problems for category: ${category}, User: ${user_id}`);
+      currentCategory = category;
+
+      const problemList = document.getElementById("problem-list");
+      const paginationControls = document.getElementById("pagination-controls");
+      const categoryTitleEl = document.getElementById("category-title");
+      const searchBar = document.getElementById("search-bar");
+
+      if (problemList) problemList.innerHTML = "<p>Loading problems...</p>";
+      if (paginationControls) {
+        paginationControls.innerHTML = "";
+        paginationControls.style.display = 'none';
+      }
+      if (searchBar) searchBar.value = "";
+
+      const categoryMap = {
+        "1": "extraDifficult", "2": "hardProblems", "3": "regularProblems",
+        "4": "regularProblems", "5": "regularProblems", "6": "regularProblems"
+      };
+      const topicMap = {
+        "3": "Algebra", "4": "Advanced Math",
+        "5": "Problem-Solving and Data Analysis", "6": "Geometry and Trigonometry"
+      };
+      const categoryTitleMap = {
+        "1": "Extra-Difficult Problems", "2": "Hard Problems", "3": "Algebra",
+        "4": "Advanced Math", "5": "Problem-Solving and Data Analysis",
+        "6": "Geometry and Trigonometry"
+      };
+
+      const apiCategory = categoryMap[category] || "regularProblems";
+      const apiTopic = topicMap[category] || "";
+      if (categoryTitleEl) {
+        categoryTitleEl.textContent = categoryTitleMap[category] || "Problems";
+      }
+
+      allProblemsInCategory = [];
+      currentFilteredProblems = [];
+      if (!userEmail) {
+        chattedProblemIds = new Set();
+      }
+
+      try {
+        const fetchURL = `/api/problems?category=${apiCategory}${apiTopic ? '&topic=' + encodeURIComponent(apiTopic) : ''}&user_id=${encodeURIComponent(user_id)}`;
+        console.log(`[Client] Fetching from ${fetchURL}`);
+        const response = await fetch(fetchURL);
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch problems: ${response.statusText} (Status: ${response.status})`);
+        }
+        const fetchedProblems = await response.json();
+
+        if (!Array.isArray(fetchedProblems)) {
+          console.warn("Invalid data format received from /api/problems.");
+          throw new Error("Invalid data format.");
+        }
+
+        allProblemsInCategory = fetchedProblems;
+        currentFilteredProblems = [...allProblemsInCategory];
+        console.log(`[Client] Received ${allProblemsInCategory.length} total problems.`);
+
+        const categoryProblemIds = new Set(allProblemsInCategory.map(p => p._id));
+
+        if (userEmail) {
+          try {
+            const userStateResponse = await fetch(`/api/email`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email: userEmail, user_id: browserUserId })
+            });
+            if (userStateResponse.ok) {
+              const userStateData = await userStateResponse.json();
+              const allUserChattedIds = new Set(userStateData.chattedProblemIds || []);
+              chattedProblemIds = new Set([...allUserChattedIds].filter(id => categoryProblemIds.has(id)));
+              console.log(`[Client] Refreshed & Filtered chattedProblemIds for category ${category}: ${chattedProblemIds.size}.`);
+            } else {
+              console.warn(`[Client] Failed to refresh user state. Filtering chattedProblemIds locally.`);
+              chattedProblemIds = new Set([...chattedProblemIds].filter(id => categoryProblemIds.has(id)));
+            }
+          } catch (stateErr) {
+            console.error("[Client] Error refreshing user state during problem load:", stateErr);
+            chattedProblemIds = new Set([...chattedProblemIds].filter(id => categoryProblemIds.has(id)));
+          }
+        } else {
+           const browserChattedIds = new Set(allProblemsInCategory.filter(p => p.chattedBefore).map(p => p._id));
+           if (browserChattedIds.size > 0) {
+               chattedProblemIds = browserChattedIds;
+               console.log(`[Client] Updated browser chattedProblemIds from API 'chattedBefore' flag: ${chattedProblemIds.size}.`);
+           } else {
+               chattedProblemIds = new Set([...chattedProblemIds].filter(id => categoryProblemIds.has(id)));
+               console.log(`[Client] No 'chattedBefore' flag; using/filtering session chattedProblemIds: ${chattedProblemIds.size}.`);
+           }
+        }
+
+        currentPage = 1;
+        const startIndex = 0;
+        const endIndex = startIndex + PROBLEMS_PER_PAGE;
+        const problemsForFirstPage = currentFilteredProblems.slice(startIndex, endIndex);
+        renderProblemPage(problemsForFirstPage);
+        renderPaginationControls(currentFilteredProblems.length);
+
+      } catch (err) {
+        console.error("[Client] Error loading problems:", err);
+        if (problemList) problemList.innerHTML = `<p>Error loading problems. (${err.message}) Please try refreshing.</p>`;
+        allProblemsInCategory = [];
+        currentFilteredProblems = [];
+        chattedProblemIds = new Set();
+        if (paginationControls) {
+          paginationControls.innerHTML = "";
+          paginationControls.style.display = 'none';
+        }
+      } finally {
+        updateProgressIndicator();
+      }
+    }
+
+    function filterProblems() {
+      const searchTerm = document.getElementById("search-bar").value.toLowerCase();
+      if (!allProblemsInCategory) return;
+
+      if (searchTerm) {
+        currentFilteredProblems = allProblemsInCategory.filter(problem => {
+          if (!problem || !problem.text) return false;
+          const tempDiv = document.createElement("div");
+          tempDiv.innerHTML = problem.text;
+          return tempDiv.textContent.toLowerCase().includes(searchTerm);
+        });
+      } else {
+        currentFilteredProblems = [...allProblemsInCategory];
+      }
+
+      currentPage = 1;
+      const startIndex = 0;
+      const endIndex = startIndex + PROBLEMS_PER_PAGE;
+      const problemsForPage = currentFilteredProblems.slice(startIndex, endIndex);
+      renderProblemPage(problemsForPage);
+      renderPaginationControls(currentFilteredProblems.length);
+    }
+
+    function exitChat() {
+      console.log("[Client] Exiting chat.");
+      const chatContainer = document.getElementById("chat-container");
+      if (chatContainer) chatContainer.style.display = "none";
+
+      if (currentProblemDbId && chattedProblemIds.has(currentProblemDbId)) {
+        const card = findProblemCard(currentProblemDbId);
+        if (card && !card.classList.contains('chatted')) {
+          card.classList.add('chatted');
+        }
+      }
+
+      currentProblemDbId = null;
+      currentProblemIndex = null;
+      pendingProblemId = null;
+    }
+
+
+    function copyCode(button) {
+      const codeBlock = button.closest('.code-block, .code-block-generic');
+      const codeElement = codeBlock?.querySelector('pre');
+
+      if (!codeElement) {
+         console.error("Could not find code element (<pre>) to copy:", codeBlock);
+         const codeTag = codeBlock?.querySelector('code');
+         if (!codeTag) {
+            console.error("Also could not find <code> element.");
+            return;
+         }
+         copyTextToClipboard(codeTag.textContent.trim(), button);
+         return;
+      }
+      copyTextToClipboard(codeElement.textContent.trim(), button);
+    }
+
+    function copyTextToClipboard(text, button) {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      textArea.style.top = '0';
+      document.body.appendChild(textArea);
+      textArea.select();
+
+      try {
+        document.execCommand("copy");
+        button.textContent = "Copied!";
+        button.disabled = true;
+        setTimeout(() => {
+          button.textContent = "Copy";
+          button.disabled = false;
+        }, 1500);
+      } catch (err) {
+        console.error("Failed to copy code:", err);
+        button.textContent = "Error";
+        setTimeout(() => (button.textContent = "Copy"), 1500);
+      } finally {
+        document.body.removeChild(textArea);
+      }
+    }
+  </script>
+
+
+  <script defer src="math-render.js"></script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+
+  <script>
+    document.addEventListener('contextmenu', event => event.preventDefault());
+  </script>
+  <script>
+    document.addEventListener('keydown', function (e) {
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && e.shiftKey && e.key === 'I') ||
+        (e.ctrlKey && e.shiftKey && e.key === 'J') ||
+        (e.ctrlKey && e.key === 'U')
+      ) {
+        e.preventDefault();
+      }
+    });
+  </script>
+
+</body>
+</html>
