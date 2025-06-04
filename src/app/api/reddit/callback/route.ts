@@ -3,8 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb'; // Adjust the path if necessary
 
 export async function POST(req: NextRequest) {
-  const client_id = process.env.REDDIT_CLIENT_ID;
-  const client_secret = process.env.REDDIT_CLIENT_SECRET;
+  export async function GET(req: NextRequest) {
   const redirect_uri = process.env.REDDIT_REDIRECT_URI as string;
 
   const code = req.nextUrl.searchParams.get('code');
