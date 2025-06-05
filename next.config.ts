@@ -19,6 +19,10 @@ const nextConfig: NextConfig = {
       },
       { // For Yelp images
         protocol: 'https',
+        hostname: 's3-media0.fl.yelpcdn.com', // Added this line
+      },
+      {
+        protocol: 'https',
         hostname: 's3-media1.fl.yelpcdn.com',
       },
       {
