@@ -4,10 +4,19 @@
 // Pass it as an argument to the configure function.
 import type LType from 'leaflet';
 
-// The user will be instructed to copy marker-icon.png, marker-icon-2x.png, and marker-shadow.png
-// to the public/leaflet/ directory.
+// Add a declaration for the global flag on the Window interface
+declare global {
+  interface Window {
+    L_DefaultIconConfigured?: boolean;
+  }
+}
 
 export function configureLeafletDefaultIcon(L_instance: typeof LType): void {
+  // Check if already configured
+  if (typeof window !== 'undefined' && window.L_DefaultIconConfigured) {
+    return;
+  }
+
   const DefaultIcon = L_instance.icon({
     iconUrl: '/leaflet/marker-icon.png',
     iconRetinaUrl: '/leaflet/marker-icon-2x.png',
@@ -20,4 +29,9 @@ export function configureLeafletDefaultIcon(L_instance: typeof LType): void {
   });
 
   L_instance.Marker.prototype.options.icon = DefaultIcon;
+
+  // Set the flag after configuration
+  if (typeof window !== 'undefined') {
+    window.L_DefaultIconConfigured = true;
+  }
 }

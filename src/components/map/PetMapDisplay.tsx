@@ -49,7 +49,7 @@ const filterOptions: { id: string; label: string; type: PlaceType; yelpCategory?
 
 const SAN_DIEGO_COORDS: [number, number] = [32.7157, -117.1611];
 const DEFAULT_ZOOM = 11;
-const FOCUSED_ZOOM = 15;
+// const FOCUSED_ZOOM = 15; // Removed as selectedMapLocation logic is removed
 
 export default function PetMapDisplay() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,7 +64,7 @@ export default function PetMapDisplay() {
   const [clientMounted, setClientMounted] = useState(false);
   const [leafletLib, setLeafletLib] = useState<typeof LType | null>(null);
   const [mapIconsConfigured, setMapIconsConfigured] = useState(false);
-  const [selectedMapLocation, setSelectedMapLocation] = useState<Place | null>(null);
+  // const [selectedMapLocation, setSelectedMapLocation] = useState<Place | null>(null); // REMOVED
 
   const mapRef = useRef<LType.Map | null>(null);
   const markerRefs = useRef(new Map<string, LType.Marker>());
@@ -74,8 +74,7 @@ export default function PetMapDisplay() {
     if (typeof window !== 'undefined') {
       import('leaflet').then(L_instance => {
         setLeafletLib(L_instance);
-        // Configure icons AFTER L_instance is available
-        configureLeafletDefaultIcon(L_instance);
+        configureLeafletDefaultIcon(L_instance); // Idempotent function
         setMapIconsConfigured(true);
       }).catch(err => {
         console.error("Failed to load Leaflet library:", err);
@@ -84,9 +83,6 @@ export default function PetMapDisplay() {
     }
   }, []);
   
-  // Removed manual map cleanup useEffect block
-
-
   useEffect(() => {
     const fetchInitialData = async () => {
       setIsLoading(true);
@@ -134,7 +130,7 @@ export default function PetMapDisplay() {
                     imageUrl: org.photos?.[0]?.medium,
                     websiteUrl: org.website || org.url,
                     dataAiHint: "animal shelter",
-                    latitude: undefined, // Petfinder organizations often lack precise coords, geocode if needed
+                    latitude: undefined, 
                     longitude: undefined,
                 }));
                 combinedLocations.push(...petfinderPlaces);
@@ -176,7 +172,6 @@ export default function PetMapDisplay() {
 
   }, [searchQuery, activeFilters, allFetchedLocations, isLoading]);
 
-
   const handleFilterChange = (type: PlaceType, checked: boolean) => {
     setActiveFilters(prev => {
       const newFilters = new Set(prev);
@@ -193,25 +188,25 @@ export default function PetMapDisplay() {
     e.preventDefault();
   };
 
-  const handleShowOnMap = (location: Place) => {
-    setSelectedMapLocation(location);
-  };
+  // const handleShowOnMap = (location: Place) => { // REMOVED
+  //   setSelectedMapLocation(location);
+  // };
 
-  useEffect(() => {
-    if (selectedMapLocation && mapRef.current && markerRefs.current.has(selectedMapLocation.id)) {
-      const { latitude, longitude } = selectedMapLocation;
-      if (latitude && longitude) {
-        mapRef.current.flyTo([latitude, longitude], FOCUSED_ZOOM);
-        const marker = markerRefs.current.get(selectedMapLocation.id);
-        if (marker) {
-          marker.openPopup();
-        }
-      }
-    }
-  }, [selectedMapLocation]);
+  // useEffect(() => { // REMOVED for selectedMapLocation
+  //   if (selectedMapLocation && mapRef.current && markerRefs.current.has(selectedMapLocation.id)) {
+  //     const { latitude, longitude } = selectedMapLocation;
+  //     if (latitude && longitude) {
+  //       mapRef.current.flyTo([latitude, longitude], FOCUSED_ZOOM);
+  //       const marker = markerRefs.current.get(selectedMapLocation.id);
+  //       if (marker) {
+  //         marker.openPopup();
+  //       }
+  //     }
+  //   }
+  // }, [selectedMapLocation]);
 
   const canRenderMap = clientMounted && leafletLib && mapIconsConfigured;
-  const showScrollIndicator = !isLoading && !error && displayedLocations.length > 2; // Show if more than 2 items
+  const showScrollIndicator = !isLoading && !error && displayedLocations.length > 2;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 min-h-[600px]">
@@ -254,7 +249,7 @@ export default function PetMapDisplay() {
       </Card>
 
       <div className="md:col-span-2 space-y-4">
-        <div className="h-[300px] md:h-[400px] bg-muted rounded-lg shadow-inner flex items-center justify-center relative overflow-hidden border">
+        <div key={canRenderMap ? 'map-ready-container' : 'map-loading-container'} className="h-[300px] md:h-[400px] bg-muted rounded-lg shadow-inner flex items-center justify-center relative overflow-hidden border">
           {canRenderMap ? (
             <DynamicMapContainer
               center={SAN_DIEGO_COORDS}
@@ -341,8 +336,8 @@ export default function PetMapDisplay() {
                             </a>
                           </Button>
                         )}
-                        <Button variant="outline" size="sm" className="mt-2 w-full text-xs" onClick={() => handleShowOnMap(loc)} disabled={!loc.latitude || !loc.longitude}>
-                          <Eye className="mr-2 h-3 w-3" /> Show on Map
+                        <Button variant="outline" size="sm" className="mt-2 w-full text-xs" disabled={!loc.latitude || !loc.longitude || !canRenderMap}>
+                          <Eye className="mr-2 h-3 w-3" /> Show on Map (Interaction Disabled)
                         </Button>
                       </div>
                     ))}
@@ -364,4 +359,3 @@ export default function PetMapDisplay() {
     </div>
   );
 }
-
