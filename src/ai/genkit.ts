@@ -1,7 +1,8 @@
 import {genkit} from 'genkit';
-import {googleAI} from '@genkit-ai/googleai';
 
+// Configure Genkit without specific plugins, relying on environment variables
+// for OpenAI-compatible APIs like Grok.
 export const ai = genkit({
-  plugins: [googleAI()],
-  model: 'googleai/gemini-2.0-flash',
+  plugins: [], // No default plugins
+  // Model will be specified per-request in the AI flows (e.g., 'grok-2-1212')
 });
