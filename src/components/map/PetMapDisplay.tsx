@@ -84,22 +84,7 @@ export default function PetMapDisplay() {
     }
   }, []);
   
-  useEffect(() => {
-    // Cleanup map instance on component unmount
-    return () => {
-      if (mapRef.current) {
-        const mapContainer = mapRef.current.getContainer();
-        if (mapContainer && document.body.contains(mapContainer)) {
-          try {
-            mapRef.current.remove();
-          } catch (e) {
-            console.warn("Error during map cleanup:", e);
-          }
-        }
-        mapRef.current = null; 
-      }
-    };
-  }, []);
+  // Removed manual map cleanup useEffect block
 
 
   useEffect(() => {
