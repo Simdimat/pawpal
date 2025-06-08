@@ -132,17 +132,19 @@ const ChatInterface = () => {
     if (showSuggestions) setShowSuggestions(false);
     
     let augmentedMessage = messageText;
-    const lowerCaseMessage = messageText.toLowerCase();
+    let actualRedditContextWasAddedToPrompt = false; // Flag for this specific turn
 
+    const lowerCaseMessage = messageText.toLowerCase();
     const redditKeywords = ["tijuana vet", "skunk", "dog beach", "shelter", "foster", "hike", "stray cat", "pet care seniors", "low-cost vet", "crowded"];
     
     if (redditKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
-      const redditContext = await fetchRedditContext(messageText);
+      const redditContext = await fetchRedditContext(messageText); 
       if (redditContext && 
           !redditContext.includes("Could not fetch specific Reddit context") && 
-          !redditContext.includes("No specific discussions found")) {
+          !redditContext.includes("No specific discussions found on r/sandiego for this topic recently.")) {
         augmentedMessage = `${messageText}\n\nConsider this from recent community discussions on r/sandiego:\n${redditContext}`;
         setMessages((prev) => [...prev, {id: `context_added_${Date.now()}`, text: "ℹ️ I've included some recent insights from r/sandiego in my considerations.", sender: 'context-info', timestamp: new Date()}]);
+        actualRedditContextWasAddedToPrompt = true; 
       }
     }
     
@@ -230,6 +232,19 @@ const ChatInterface = () => {
         }
          if (doneStreaming) break; 
       }
+
+      // After the loop, aiPartialResponse has the full AI text. Append if Reddit context was used.
+      let finalAiText = aiPartialResponse;
+      if (actualRedditContextWasAddedToPrompt) {
+        finalAiText += " (Derived from reddit!)";
+      }
+
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg.id === aiMessageId ? { ...msg, text: finalAiText } : msg
+        )
+      );
+
     } catch (error) {
       console.error('Error sending message or processing response:', error);
       const errorMessage = (error instanceof Error && error.message) 
@@ -240,11 +255,23 @@ const ChatInterface = () => {
         description: errorMessage.substring(0, 300),
         variant: 'destructive',
       });
-      setMessages((prevMessages) =>
-        prevMessages.map((msg) =>
-          msg.id === aiMessageId ? { ...msg, text: `Sorry, I encountered an error: ${errorMessage.substring(0,100)}...` } : msg
-        ).filter(msg => msg.id !== aiMessageId || (msg.id === aiMessageId && msg.text && msg.text.startsWith("Sorry"))) 
-      );
+      // Ensure aiMessageId is defined before trying to update/filter based on it
+      if(aiMessageId){
+        setMessages((prevMessages) =>
+          prevMessages.map((msg) =>
+            msg.id === aiMessageId ? { ...msg, text: `Sorry, I encountered an error: ${errorMessage.substring(0,100)}...` } : msg
+          ).filter(msg => msg.id !== aiMessageId || (msg.id === aiMessageId && msg.text && msg.text.startsWith("Sorry"))) 
+        );
+      } else {
+         // Fallback if aiMessageId was not set (should not happen if placeholder was added)
+         const errorPlaceholderMessage: Message = {
+            id: `ai_error_${Date.now()}`,
+            text: `Sorry, I encountered an error: ${errorMessage.substring(0,100)}...`,
+            sender: 'ai',
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, errorPlaceholderMessage]);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -363,3 +390,4 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
+
