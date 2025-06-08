@@ -5,26 +5,26 @@ import type {NextRequest} from 'next/server';
 import OpenAI from 'openai';
 import { userThreads } from '@/lib/chat-store';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-const ASSISTANT_ID = process.env.ASSISTANT_ID;
+// Defer client instantiation to inside the handler
 
 export async function POST(request: NextRequest) {
   console.log('[API Chat] POST request received.');
-  console.log(`[API Chat] OPENAI_API_KEY is set: ${!!process.env.OPENAI_API_KEY}`);
-  console.log(`[API Chat] ASSISTANT_ID: ${ASSISTANT_ID}`);
 
-  if (!ASSISTANT_ID) {
+  const assistantId = process.env.ASSISTANT_ID;
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+
+  if (!assistantId) {
     console.error("CRITICAL: ASSISTANT_ID environment variable is not set.");
-    // Send a structured error to the client
     return NextResponse.json({ error: "Server configuration error: Assistant ID missing.", details: "ASSISTANT_ID is not configured." }, { status: 500 });
   }
-  if (!process.env.OPENAI_API_KEY) {
+  if (!openaiApiKey) {
     console.error("CRITICAL: OPENAI_API_KEY environment variable is not set.");
     return NextResponse.json({ error: "Server configuration error: OpenAI API Key missing.", details: "OPENAI_API_KEY is not configured." }, { status: 500 });
   }
+  
+  const openai = new OpenAI({
+    apiKey: openaiApiKey,
+  });
 
   try {
     const body = await request.json();
@@ -55,10 +55,9 @@ export async function POST(request: NextRequest) {
       async start(controller) {
         const encoder = new TextEncoder();
         try {
-          // Use createAndStream and remove model override
           const runStream = await openai.beta.threads.runs.createAndStream(threadId, {
-            assistant_id: ASSISTANT_ID,
-            // No model override here; relies on the Assistant's configuration
+            assistant_id: assistantId,
+            // model: 'gpt-4o-mini', // Rely on assistant's configuration
           });
           
           console.log(`[API Chat] Run stream initiated for thread ${threadId}.`);
@@ -91,7 +90,6 @@ export async function POST(request: NextRequest) {
         } catch (streamError: any) {
             const errorMessageText = streamError instanceof Error ? streamError.message : String(streamError);
             console.error('[API Chat] Error during run creation or stream setup:', errorMessageText, streamError.stack);
-            // Ensure error messages are JSON stringified for client parsing
             controller.enqueue(encoder.encode(`data: [ERROR] ${JSON.stringify(`Stream error: ${errorMessageText.substring(0,150)}`)}\n\n`));
             controller.close();
         }

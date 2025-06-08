@@ -1,18 +1,24 @@
+
 // src/app/api/chat-history/route.ts
 import {NextResponse} from 'next/server';
 import type {NextRequest} from 'next/server';
 import OpenAI from 'openai';
 import { userThreads } from '@/lib/chat-store';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error("OPENAI_API_KEY environment variable is not set.");
-}
+// Defer client instantiation to inside the handler
 
 export async function GET(request: NextRequest) {
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+
+  if (!openaiApiKey) {
+    console.error("CRITICAL: OPENAI_API_KEY environment variable is not set for chat history.");
+    return NextResponse.json({ error: "Server configuration error: OpenAI API Key missing for chat history.", details: "OPENAI_API_KEY is not configured." }, { status: 500 });
+  }
+
+  const openai = new OpenAI({
+    apiKey: openaiApiKey,
+  });
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const user_id = searchParams.get('user_id');
