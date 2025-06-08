@@ -93,23 +93,22 @@ const ChatInterface = () => {
 
   const fetchRedditContext = async (query: string): Promise<string | null> => {
     setIsFetchingContext(true);
-    // Add a temporary "fetching context" message
     const contextMsgId = `context_${Date.now()}`;
-    setMessages((prev) => [...prev, {id: contextMsgId, text: "Checking for recent community discussions on Reddit...", sender: 'context-info', timestamp: new Date()}]);
+    setMessages((prev) => [...prev, {id: contextMsgId, text: "Checking r/sandiego for recent community discussions...", sender: 'context-info', timestamp: new Date()}]);
 
     try {
       const response = await fetch(`/api/reddit-context?query=${encodeURIComponent(query)}`);
       if (!response.ok) {
         console.warn('Failed to fetch Reddit context, proceeding without it.');
-        setMessages(prev => prev.filter(m => m.id !== contextMsgId)); // Remove context message
+        setMessages(prev => prev.filter(m => m.id !== contextMsgId)); 
         return null;
       }
       const data = await response.json();
-      setMessages(prev => prev.filter(m => m.id !== contextMsgId)); // Remove context message
+      setMessages(prev => prev.filter(m => m.id !== contextMsgId)); 
       return data.redditContext || null;
     } catch (error) {
       console.error('Error fetching Reddit context:', error);
-      setMessages(prev => prev.filter(m => m.id !== contextMsgId)); // Remove context message
+      setMessages(prev => prev.filter(m => m.id !== contextMsgId)); 
       return null;
     } finally {
       setIsFetchingContext(false);
@@ -135,15 +134,15 @@ const ChatInterface = () => {
     let augmentedMessage = messageText;
     const lowerCaseMessage = messageText.toLowerCase();
 
-    // Keywords for fetching Reddit context
-    const redditKeywords = ["tijuana vet", "skunk", "dog beach", "shelter", "foster", "hike", "stray cat", "pet care seniors"];
+    const redditKeywords = ["tijuana vet", "skunk", "dog beach", "shelter", "foster", "hike", "stray cat", "pet care seniors", "low-cost vet", "crowded"];
     
     if (redditKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
       const redditContext = await fetchRedditContext(messageText);
-      if (redditContext && redditContext !== "Could not fetch specific Reddit context at this time." && redditContext !== "No specific discussions found on Reddit for this topic recently.") {
-        augmentedMessage = `${messageText}\n\nConsider this from recent community discussions:\n${redditContext}`;
-         // Optionally, add a message confirming context was added
-        setMessages((prev) => [...prev, {id: `context_added_${Date.now()}`, text: "ℹ️ I've included some recent community insights in my considerations.", sender: 'context-info', timestamp: new Date()}]);
+      if (redditContext && 
+          !redditContext.includes("Could not fetch specific Reddit context") && 
+          !redditContext.includes("No specific discussions found")) {
+        augmentedMessage = `${messageText}\n\nConsider this from recent community discussions on r/sandiego:\n${redditContext}`;
+        setMessages((prev) => [...prev, {id: `context_added_${Date.now()}`, text: "ℹ️ I've included some recent insights from r/sandiego in my considerations.", sender: 'context-info', timestamp: new Date()}]);
       }
     }
     
@@ -156,7 +155,7 @@ const ChatInterface = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           user_id: chatUserId,
-          message: augmentedMessage, // Send the potentially augmented message
+          message: augmentedMessage, 
         }),
       });
 
@@ -202,7 +201,7 @@ const ChatInterface = () => {
             const raw = line.substring('data: '.length).trim();
             if (raw === '[DONE]') {
               doneStreaming = true;
-              break;
+              break; 
             }
             if (raw.startsWith("[ERROR]")) {
               console.error("SSE Stream Error:", raw);
@@ -229,7 +228,7 @@ const ChatInterface = () => {
             }
           }
         }
-        if (doneStreaming) break; 
+         if (doneStreaming) break; 
       }
     } catch (error) {
       console.error('Error sending message or processing response:', error);
@@ -259,7 +258,6 @@ const ChatInterface = () => {
 
   const handleSuggestionClick = async (question: string) => {
     setShowSuggestions(false);
-    // setInput(question); // Don't set input directly, let processAndSendMessage handle it
     await processAndSendMessage(question);
   };
 
@@ -317,7 +315,7 @@ const ChatInterface = () => {
                 </Avatar>
                 <div className="max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap bg-card text-card-foreground border">
                     <Loader2 className="h-4 w-4 animate-spin" /> 
-                    {isFetchingContext && <span className="ml-2 text-xs italic">Checking community discussions...</span>}
+                    {isFetchingContext && <span className="ml-2 text-xs italic">Checking r/sandiego...</span>}
                 </div>
              </div>
            )}
@@ -365,4 +363,3 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
-

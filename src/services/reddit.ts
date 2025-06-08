@@ -31,7 +31,7 @@ const getNewAccessToken = async (): Promise<string> => {
 
     const { access_token, expires_in } = response.data;
     redditAccessToken = access_token;
-    tokenExpirationTime = Math.floor(Date.now() / 1000) + expires_in - 60;
+    tokenExpirationTime = Math.floor(Date.now() / 1000) + expires_in - 60; // Refresh 60 seconds before expiry
     console.log('Successfully acquired new Reddit access token.');
     return access_token;
   } catch (error) {
@@ -101,29 +101,58 @@ interface RedditSearchResponse {
 
 export async function searchReddit(
   query: string,
-  subreddits: string[] = ['sandiego', 'dogs', 'vet', 'AskVet', 'Tijuana'],
-  limit: number = 5,
+  subreddits?: string[], // Optional: for broader search if primarySubreddit is not used
+  limit: number = 3, // Reduced default for more focused context
   sort: 'relevance' | 'hot' | 'top' | 'new' | 'comments' = 'relevance',
-  timeframe: 'hour' | 'day' | 'week' | 'month' | 'year' | 'all' = 'year'
+  timeframe: 'hour' | 'day' | 'week' | 'month' | 'year' | 'all' = 'year',
+  primarySubreddit?: string // New parameter to target a specific subreddit
 ): Promise<RedditPost[]> {
-  // Construct subreddit part of the query: (subreddit:foo OR subreddit:bar)
-  const subredditQueryPart = subreddits.map(sr => `subreddit:${sr}`).join(' OR ');
-  const fullQuery = `${query} (${subredditQueryPart})`;
+  let url: string;
+  let searchParams: URLSearchParams;
+
+  if (primarySubreddit) {
+    // Search within a specific subreddit
+    url = `https://oauth.reddit.com/r/${primarySubreddit}/search.json`;
+    searchParams = new URLSearchParams({
+      q: query,
+      restrict_sr: '1', // Restrict search to this subreddit
+      limit: limit.toString(),
+      sort,
+      t: timeframe,
+    });
+  } else if (subreddits && subreddits.length > 0) {
+    // Broader search across specified subreddits using query syntax
+    const subredditQueryPart = subreddits.map(sr => `subreddit:${sr}`).join(' OR ');
+    const fullQuery = `${query} (${subredditQueryPart})`;
+    url = `https://oauth.reddit.com/search.json`;
+    searchParams = new URLSearchParams({
+      q: fullQuery,
+      limit: limit.toString(),
+      sort,
+      t: timeframe,
+      restrict_sr: '0', // Do not restrict to a single SR if multiple are in query
+    });
+  } else {
+    // General search across all of Reddit if no subreddits specified
+    url = `https://oauth.reddit.com/search.json`;
+    searchParams = new URLSearchParams({
+      q: query,
+      limit: limit.toString(),
+      sort,
+      t: timeframe,
+    });
+  }
   
-  // Use a general search endpoint, not restricted to one subreddit in the path if multiple are specified in query
-  // Or, search across a comma-separated list of subreddits if API supports: /r/sub1+sub2/search
-  // For broader search using query syntax, stick to /search
-  const url = `https://oauth.reddit.com/search?q=${encodeURIComponent(fullQuery)}&limit=${limit}&sort=${sort}&t=${timeframe}&restrict_sr=0`; // restrict_sr=0 to search all specified subreddits
+  const fullUrl = `${url}?${searchParams.toString()}`;
 
   try {
-    const responseData: RedditSearchResponse = await makeAuthenticatedRedditRequest(url, 'GET');
+    const responseData: RedditSearchResponse = await makeAuthenticatedRedditRequest(fullUrl, 'GET');
     if (responseData && responseData.data && responseData.data.children) {
       return responseData.data.children.map(child => child.data);
     }
     return [];
   } catch (error) {
     console.error(`Error searching Reddit for "${query}":`, error);
-    // Return empty array or throw a more specific error for the caller to handle
     return []; 
   }
 }
