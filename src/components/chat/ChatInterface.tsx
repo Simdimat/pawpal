@@ -187,9 +187,11 @@ const ChatInterface = () => {
       };
       setMessages((prev) => [...prev, aiPlaceholderMessage]);
 
-      while (true) {
+      let doneStreaming = false;
+      while (!doneStreaming) {
         const { done, value } = await reader.read();
         if (done) {
+          doneStreaming = true;
           break;
         }
         const chunk = decoder.decode(value, { stream: true });
@@ -199,6 +201,7 @@ const ChatInterface = () => {
           if (line.startsWith('data: ')) {
             const raw = line.substring('data: '.length).trim();
             if (raw === '[DONE]') {
+              doneStreaming = true;
               break;
             }
             if (raw.startsWith("[ERROR]")) {
@@ -226,7 +229,7 @@ const ChatInterface = () => {
             }
           }
         }
-         if (line.startsWith('data: ') && line.substring('data: '.length).trim() === '[DONE]') break; // ensure break from inner loop too
+        if (doneStreaming) break; 
       }
     } catch (error) {
       console.error('Error sending message or processing response:', error);
