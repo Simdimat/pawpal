@@ -5,53 +5,53 @@ import { searchReddit, type RedditPost } from '@/services/reddit';
 // Function to extract simpler search terms from a conversational query
 function getSearchKeywords(query: string): string {
   const qLower = query.toLowerCase();
-  if (qLower.includes('skunk')) {
-    return 'skunk dog experiences OR skunk removal OR dog skunk spray';
+  if (qLower.includes('skunk spray') || (qLower.includes('dog') && qLower.includes('skunk'))) {
+    return 'skunk dog experiences OR skunk removal OR dog skunk spray OR skunk odor';
   }
   if (qLower.includes('tijuana vet') || qLower.includes('tj vet')) {
     return 'tijuana vet OR tj vet experiences OR tijuana veterinarian recommendations';
   }
   if (qLower.includes('dog beach')) {
-    return 'dog beach OR best dog beach san diego OR off leash beach';
+    return 'dog beach san diego OR best dog beach OR off leash beach san diego';
   }
   if (qLower.includes('foster program') || qLower.includes('dog foster')) {
-    return 'foster program OR dog foster san diego OR beginner foster pets';
+    return 'dog foster program san diego OR beginner friendly pet foster';
   }
   if (qLower.includes('low-cost vet') || qLower.includes('affordable vet')) {
-    return 'low cost vet san diego OR affordable veterinarian OR cheap pet clinic';
+    return 'low cost vet san diego OR affordable veterinarian OR cheap pet clinic san diego';
   }
   if (qLower.includes('stray cat') || qLower.includes('found cat')) {
-    return 'found stray cat san diego OR help stray cat';
+    return 'found stray cat san diego OR help stray cat san diego';
   }
   if (qLower.includes('stray dog') || qLower.includes('found dog')) {
-    return 'found stray dog san diego OR help stray dog';
+    return 'found stray dog san diego OR help stray dog san diego';
   }
   if (qLower.includes('hike with dog') || qLower.includes('dog friendly hike')) {
-    return 'dog friendly hike san diego OR best dog trails OR less crowded dog hike';
+    return 'dog friendly hike san diego OR best dog trails OR less crowded dog hike san diego';
   }
    if (qLower.includes('pets for seniors') || qLower.includes('pet care for seniors')) {
     return 'volunteer pet care seniors san diego OR pets for elderly san diego';
   }
   
   // Fallback: try to extract significant words
-  const words = query.replace(/[^\w\s]/gi, '').split(' ').filter(w => w.length > 3); // filter out very short words and punctuation
-  if (words.length > 0 && words.length <= 3) {
-    return words.join(' ');
+  const words = query.replace(/[^\w\s]/gi, '').split(' ').filter(w => w.length > 3 && !['what', 'where', 'does', 'find', 'looking'].includes(w.toLowerCase()));
+  if (words.length > 0 && words.length <= 4) {
+    return words.join(' OR '); // Use OR for broader matching
   }
-  if (words.length > 3) {
-    return words.slice(0, 3).join(' '); // Take first 3 significant words
+  if (words.length > 4) {
+    return words.slice(0, 4).join(' OR '); 
   }
+  console.log(`[API /reddit-context] getSearchKeywords: Defaulting to original query for Reddit search: "${query}"`);
   return query; // Default to original query if no keywords or too short/long after processing
 }
 
 
-function summarizePosts(posts: RedditPost[], sourceLabel: string, maxLength: number = 450): string {
+function summarizePosts(posts: RedditPost[], sourceLabel: string, originalQuery: string, maxLength: number = 450): string {
   if (!posts || posts.length === 0) {
     console.log(`[API /reddit-context] summarizePosts: No posts array or empty array from ${sourceLabel}.`);
     return `No specific discussions found on ${sourceLabel} for this topic recently.`;
   }
 
-  // Simplified header
   let summaryHeader = `Context from ${sourceLabel} regarding your query:\n`;
   let summarizedContent = "";
   let postsIncludedCount = 0;
@@ -61,13 +61,17 @@ function summarizePosts(posts: RedditPost[], sourceLabel: string, maxLength: num
         continue;
     }
     let postItemText = `- "${post.title}"`;
-    if (post.selftext && post.selftext.trim() !== "" && post.selftext.length < 150 && !post.selftext.toLowerCase().includes(post.title.toLowerCase().substring(0,10))) {
-      postItemText += ` (User said: ${post.selftext.substring(0, 80).replace(/\n/g, ' ')}...)`;
+    // Try to include a bit more of the selftext if available and distinct
+    if (post.selftext && post.selftext.trim() !== "" && !post.selftext.toLowerCase().includes(post.title.toLowerCase().substring(0,10))) {
+      const snippet = post.selftext.substring(0, 250).replace(/\n/g, ' ').trim(); // Increased snippet length
+      if (snippet.length > 10) { // Only add if snippet is somewhat substantial
+         postItemText += ` (User said: ${snippet}...)`;
+      }
     }
     postItemText += ` (Score: ${post.score})\n`;
     
-    if (summarizedContent.length + postItemText.length > maxLength) {
-      if (postsIncludedCount === 0) { 
+    if (summaryHeader.length + summarizedContent.length + postItemText.length > maxLength) {
+      if (postsIncludedCount === 0 && (summaryHeader.length + postItemText.length <= maxLength) ) { 
         summarizedContent += postItemText;
         postsIncludedCount++;
       }
@@ -112,9 +116,9 @@ export async function GET(request: NextRequest) {
       'year',
       'sandiego' 
     );
-    console.log(`[API /reddit-context] Raw Reddit Posts from r/sandiego for keywords "${redditSearchQuery}":`, sanDiegoPosts.length > 0 ? JSON.stringify(sanDiegoPosts.map(p => ({title: p.title, score: p.score, selftext_preview: p.selftext?.substring(0,50)})).slice(0,3), null, 2) : "No posts");
+    console.log(`[API /reddit-context] Raw Reddit Posts from r/sandiego for keywords "${redditSearchQuery}":`, sanDiegoPosts.length > 0 ? JSON.stringify(sanDiegoPosts.map(p => ({title: p.title, score: p.score, selftext_preview: p.selftext?.substring(0,50)})).slice(0,3), null, 2) : "No posts found or error in fetching.");
     
-    const sanDiegoSummary = summarizePosts(sanDiegoPosts, 'r/sandiego');
+    const sanDiegoSummary = summarizePosts(sanDiegoPosts, 'r/sandiego', originalQuery);
     console.log(`[API /reddit-context] Summarized r/sandiego context: "${sanDiegoSummary}"`);
     
     const noResultsSanDiego = !sanDiegoPosts.length ||
@@ -122,22 +126,24 @@ export async function GET(request: NextRequest) {
                               sanDiegoSummary.includes("Could not extract a concise summary from r/sandiego");
 
     if (noResultsSanDiego) {
-      console.log(`[API /reddit-context] r/sandiego search yielded few/no results for "${originalQuery}". Attempting general Reddit search with keywords: "${redditSearchQuery}" (limit 5)`);
+      console.log(`[API /reddit-context] r/sandiego search yielded few/no results for query related to "${originalQuery}". Attempting general Reddit search with keywords: "${redditSearchQuery}" (limit 5)`);
+      // General pet-related subreddits + San Diego focused ones
+      const generalSubreddits = ['pets', 'dogs', 'cats', 'AskVet', 'animalrescue', 'sandiego_pets', 'aww', 'DogAdvice', 'CatAdvice'];
       const generalPosts = await searchReddit(
         redditSearchQuery, 
-        ['pets', 'dogs', 'cats', 'AskVet', 'animalrescue', 'sandiego_pets', 'aww'], // Added 'aww' as it was successful in test
-        5,
-        'relevance',
-        'month'
+        generalSubreddits,
+        5, // Limit for general search
+        'relevance', // Sort by relevance for broader search
+        'month' // More recent for general fallback
       );
-      console.log(`[API /reddit-context] Raw Reddit Posts from general search for keywords "${redditSearchQuery}":`, generalPosts.length > 0 ? JSON.stringify(generalPosts.map(p => ({title: p.title, score: p.score, selftext_preview: p.selftext?.substring(0,50)})).slice(0,3), null, 2) : "No posts");
+      console.log(`[API /reddit-context] Raw Reddit Posts from general search for keywords "${redditSearchQuery}":`, generalPosts.length > 0 ? JSON.stringify(generalPosts.map(p => ({title: p.title, score: p.score, selftext_preview: p.selftext?.substring(0,50)})).slice(0,3), null, 2) : "No posts found or error in fetching.");
       
-      const generalRedditSummary = summarizePosts(generalPosts, 'general Reddit discussions');
+      const generalRedditSummary = summarizePosts(generalPosts, 'general Reddit community discussions', originalQuery);
       console.log(`[API /reddit-context] Summarized general Reddit context: "${generalRedditSummary}"`);
       
       const noResultsGeneral = !generalPosts.length ||
-                                generalRedditSummary.includes("No specific discussions found on general Reddit discussions") ||
-                                generalRedditSummary.includes("Could not extract a concise summary from general Reddit discussions");
+                                generalRedditSummary.includes("No specific discussions found on general Reddit community discussions") ||
+                                generalRedditSummary.includes("Could not extract a concise summary from general Reddit community discussions");
 
       if (!noResultsGeneral) {
         redditContext = generalRedditSummary;
@@ -145,7 +151,7 @@ export async function GET(request: NextRequest) {
       } else {
         source = 'none';
         redditContext = `Could not find specific community discussions for "${originalQuery}" on Reddit recently.`;
-        console.log(`[API /reddit-context] Both r/sandiego and general Reddit search yielded no specific results for "${originalQuery}".`);
+        console.log(`[API /reddit-context] Both r/sandiego and general Reddit search yielded no specific results for query related to "${originalQuery}".`);
       }
     } else {
       redditContext = sanDiegoSummary;
@@ -158,9 +164,11 @@ export async function GET(request: NextRequest) {
 
   } catch (error: any) {
     console.error(`[API /reddit-context] Error fetching Reddit context for original query "${originalQuery}":`, error.message, error.stack);
+    // Return a 200 so chat can proceed, but indicate failure to fetch context
     return NextResponse.json({ 
       redditContext: `Could not fetch Reddit context at this time due to an error. Please try again later.`,
       source: 'none' 
-    }, { status: 200 }); // Return 200 so chat can proceed with base info
+    }, { status: 200 }); 
   }
 }
+
