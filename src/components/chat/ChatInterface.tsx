@@ -91,26 +91,26 @@ const ChatInterface = () => {
     }
   }, [messages]);
 
-  const fetchRedditContext = async (query: string): Promise<string | null> => {
+  const fetchRedditContext = async (query: string): Promise<{ redditContext: string | null; source: string | null }> => {
     setIsFetchingContext(true);
     const contextMsgId = `context_${Date.now()}`;
-    setMessages((prev) => [...prev, {id: contextMsgId, text: "Checking r/sandiego for recent community discussions...", sender: 'context-info', timestamp: new Date()}]);
+    setMessages((prev) => [...prev, {id: contextMsgId, text: "Checking Reddit for recent community discussions...", sender: 'context-info', timestamp: new Date()}]);
 
     try {
       const response = await fetch(`/api/reddit-context?query=${encodeURIComponent(query)}`);
       if (!response.ok) {
         console.warn('[ChatInterface] Failed to fetch Reddit context, API responded with non-OK status:', response.status);
         setMessages(prev => prev.filter(m => m.id !== contextMsgId)); 
-        return null;
+        return { redditContext: null, source: null };
       }
-      const data = await response.json();
+      const data: { redditContext: string; source: string } = await response.json();
       console.log('[ChatInterface] Data from /api/reddit-context:', data);
       setMessages(prev => prev.filter(m => m.id !== contextMsgId)); 
-      return data.redditContext || null;
+      return { redditContext: data.redditContext, source: data.source };
     } catch (error) {
       console.error('[ChatInterface] Error fetching Reddit context:', error);
       setMessages(prev => prev.filter(m => m.id !== contextMsgId)); 
-      return null;
+      return { redditContext: null, source: null };
     } finally {
       setIsFetchingContext(false);
     }
@@ -136,24 +136,28 @@ const ChatInterface = () => {
     let actualRedditContextWasAddedToPrompt = false; 
 
     const lowerCaseMessage = messageText.toLowerCase();
-    const redditKeywords = ["tijuana vet", "skunk", "dog beach", "shelter", "foster", "hike", "stray cat", "pet care seniors", "low-cost vet", "crowded", "recommendations", "best", "advice on", "what to do"];
+    // More generic keywords, specific topic check in API now
+    const redditKeywords = ["recommend", "advice", "best", "what to do", "experience", "tijuana", "skunk", "beach", "shelter", "foster", "hike", "stray", "cost", "affordable", "help", "tip"];
     
     if (redditKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
-      const redditContext = await fetchRedditContext(messageText); 
-      console.log('[ChatInterface] Fetched Reddit Context for augmentation:', redditContext);
+      const { redditContext, source } = await fetchRedditContext(messageText); 
+      console.log('[ChatInterface] Fetched Reddit Context for augmentation:', redditContext, 'Source:', source);
 
-      if (redditContext && 
+      if (redditContext && source && source !== 'none' &&
           !redditContext.includes("Could not fetch specific Reddit context") && 
-          !redditContext.includes("No specific discussions found on r/sandiego for this topic recently.")) {
-        augmentedMessage = `${messageText}\n\nConsider this from recent community discussions on r/sandiego:\n${redditContext}`;
-        setMessages((prev) => [...prev, {id: `context_added_${Date.now()}`, text: "ℹ️ I've included some recent insights from r/sandiego in my considerations.", sender: 'context-info', timestamp: new Date()}]);
+          !redditContext.includes("No specific discussions found") &&
+          !redditContext.includes("Could not find specific community discussions")) {
+        
+        const sourceLabel = source === 'r/sandiego' ? 'r/sandiego' : 'general Reddit';
+        augmentedMessage = `${messageText}\n\nConsider this from recent community discussions on ${sourceLabel}:\n${redditContext}`;
+        setMessages((prev) => [...prev, {id: `context_added_${Date.now()}`, text: `ℹ️ I've included some recent insights from ${sourceLabel} in my considerations.`, sender: 'context-info', timestamp: new Date()}]);
         actualRedditContextWasAddedToPrompt = true; 
-        console.log('[ChatInterface] Reddit context was added to the prompt. actualRedditContextWasAddedToPrompt = true');
+        console.log(`[ChatInterface] Reddit context from ${sourceLabel} was added to the prompt. actualRedditContextWasAddedToPrompt = true`);
       } else {
         console.log('[ChatInterface] Reddit context was not suitable to add to prompt, or was null/empty. actualRedditContextWasAddedToPrompt = false. Context received:', redditContext);
       }
     } else {
-        console.log('[ChatInterface] No Reddit keywords detected in user message.');
+        console.log('[ChatInterface] No Reddit keywords detected in user message, or context fetch was unsuitable.');
     }
     
     setIsLoading(true);
@@ -210,7 +214,7 @@ const ChatInterface = () => {
           if (line.startsWith('data: ')) {
             const raw = line.substring('data: '.length).trim();
             if (raw === '[DONE]') {
-              doneStreaming = true; // Set flag to break outer loop
+              doneStreaming = true; 
               break; 
             }
             if (raw.startsWith("[ERROR]")) {
@@ -218,10 +222,10 @@ const ChatInterface = () => {
               const streamedErrorMsg = raw.substring("[ERROR] ".length);
               let finalErrorMsg = "Server indicated an error in the stream.";
               try {
-                  const parsedError = JSON.parse(streamedErrorMsg); // errors from Assistant API can be JSON
+                  const parsedError = JSON.parse(streamedErrorMsg);
                   finalErrorMsg = parsedError.message || parsedError.error || parsedError.detail || streamedErrorMsg;
               } catch (e) {
-                  finalErrorMsg = streamedErrorMsg; // Or just the raw string if not JSON
+                  finalErrorMsg = streamedErrorMsg; 
               }
               throw new Error(`Stream Error: ${finalErrorMsg}`);
             }
@@ -352,7 +356,7 @@ const ChatInterface = () => {
                 </Avatar>
                 <div className="max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap bg-card text-card-foreground border">
                     <Loader2 className="h-4 w-4 animate-spin" /> 
-                    {isFetchingContext && <span className="ml-2 text-xs italic">Checking r/sandiego...</span>}
+                    {isFetchingContext && <span className="ml-2 text-xs italic">Checking Reddit...</span>}
                 </div>
              </div>
            )}
