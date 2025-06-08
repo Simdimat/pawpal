@@ -6,21 +6,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, User, Bot, Loader2, HelpCircle } from 'lucide-react';
+import { Send, User, Bot, Loader2, HelpCircle, MessageSquareText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 interface Message {
   id: string;
   text: string;
-  sender: 'user' | 'ai';
+  sender: 'user' | 'ai' | 'context-info';
   timestamp: Date;
 }
 
 const suggestedQuestionsList = [
   "My dog got sprayed by a skunk! What do I do?",
   "Where's a good dog beach in San Diego?",
-  "Recommend low-cost vet services.",
+  "Any recommendations for Tijuana vet care?",
   "Find shelters for dog walking.",
 ];
 
@@ -38,6 +38,7 @@ const ChatInterface = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingContext, setIsFetchingContext] = useState(false);
   const [chatUserId, setChatUserId] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(true);
 
@@ -90,6 +91,31 @@ const ChatInterface = () => {
     }
   }, [messages]);
 
+  const fetchRedditContext = async (query: string): Promise<string | null> => {
+    setIsFetchingContext(true);
+    // Add a temporary "fetching context" message
+    const contextMsgId = `context_${Date.now()}`;
+    setMessages((prev) => [...prev, {id: contextMsgId, text: "Checking for recent community discussions on Reddit...", sender: 'context-info', timestamp: new Date()}]);
+
+    try {
+      const response = await fetch(`/api/reddit-context?query=${encodeURIComponent(query)}`);
+      if (!response.ok) {
+        console.warn('Failed to fetch Reddit context, proceeding without it.');
+        setMessages(prev => prev.filter(m => m.id !== contextMsgId)); // Remove context message
+        return null;
+      }
+      const data = await response.json();
+      setMessages(prev => prev.filter(m => m.id !== contextMsgId)); // Remove context message
+      return data.redditContext || null;
+    } catch (error) {
+      console.error('Error fetching Reddit context:', error);
+      setMessages(prev => prev.filter(m => m.id !== contextMsgId)); // Remove context message
+      return null;
+    } finally {
+      setIsFetchingContext(false);
+    }
+  };
+
   const processAndSendMessage = async (messageText: string) => {
     if (!messageText.trim() || !chatUserId) return;
 
@@ -103,9 +129,26 @@ const ChatInterface = () => {
     if (input === messageText) {
         setInput('');
     }
-    setIsLoading(true);
+    
     if (showSuggestions) setShowSuggestions(false);
-    let aiMessageId = `ai_${Date.now()}`; // Define here for access in catch/finally
+    
+    let augmentedMessage = messageText;
+    const lowerCaseMessage = messageText.toLowerCase();
+
+    // Keywords for fetching Reddit context
+    const redditKeywords = ["tijuana vet", "skunk", "dog beach", "shelter", "foster", "hike", "stray cat", "pet care seniors"];
+    
+    if (redditKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
+      const redditContext = await fetchRedditContext(messageText);
+      if (redditContext && redditContext !== "Could not fetch specific Reddit context at this time." && redditContext !== "No specific discussions found on Reddit for this topic recently.") {
+        augmentedMessage = `${messageText}\n\nConsider this from recent community discussions:\n${redditContext}`;
+         // Optionally, add a message confirming context was added
+        setMessages((prev) => [...prev, {id: `context_added_${Date.now()}`, text: "ℹ️ I've included some recent community insights in my considerations.", sender: 'context-info', timestamp: new Date()}]);
+      }
+    }
+    
+    setIsLoading(true);
+    let aiMessageId = `ai_${Date.now()}`; 
 
     try {
       const response = await fetch('/api/chat', { 
@@ -113,25 +156,19 @@ const ChatInterface = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           user_id: chatUserId,
-          message: messageText,
+          message: augmentedMessage, // Send the potentially augmented message
         }),
       });
 
       if (!response.ok) {
         let serverErrorMessage = 'Failed to get response from PawPal.';
-        let errorDetails = `Status: ${response.status}`;
         try {
           const errorBody = await response.json();
-          serverErrorMessage = errorBody.error || serverErrorMessage;
-          if (errorBody.details) {
-            errorDetails = `${serverErrorMessage} - Details: ${errorBody.details}`;
-          } else {
-            errorDetails = serverErrorMessage;
-          }
+          serverErrorMessage = errorBody.error || (errorBody.details ? `${errorBody.details} (Status: ${response.status})` : serverErrorMessage);
         } catch (parseError) {
           console.warn('Failed to parse error response JSON:', parseError);
         }
-        throw new Error(errorDetails || serverErrorMessage);
+        throw new Error(serverErrorMessage);
       }
       
       if (!response.body) {
@@ -189,6 +226,7 @@ const ChatInterface = () => {
             }
           }
         }
+         if (line.startsWith('data: ') && line.substring('data: '.length).trim() === '[DONE]') break; // ensure break from inner loop too
       }
     } catch (error) {
       console.error('Error sending message or processing response:', error);
@@ -218,7 +256,8 @@ const ChatInterface = () => {
 
   const handleSuggestionClick = async (question: string) => {
     setShowSuggestions(false);
-    setInput(question); 
+    // setInput(question); // Don't set input directly, let processAndSendMessage handle it
+    await processAndSendMessage(question);
   };
 
   return (
@@ -239,12 +278,19 @@ const ChatInterface = () => {
                   <AvatarFallback><Bot size={18}/></AvatarFallback>
                 </Avatar>
               )}
+               {message.sender === 'context-info' && (
+                <Avatar className="h-8 w-8 opacity-70">
+                  <AvatarFallback><MessageSquareText size={18} className="text-blue-500"/></AvatarFallback>
+                </Avatar>
+              )}
               <div
                 className={cn(
                   'max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap',
                   message.sender === 'user'
                     ? 'bg-primary text-primary-foreground'
-                    : 'bg-card text-card-foreground border'
+                    : message.sender === 'ai'
+                    ? 'bg-card text-card-foreground border'
+                    : 'bg-blue-50 border border-blue-200 text-blue-700 text-xs italic'
                 )}
               >
                 {message.text || (message.sender === 'ai' && isLoading && messages.length > 0 && messages[messages.length -1]?.id === message.id && <Loader2 className="h-4 w-4 animate-spin" />)}
@@ -260,21 +306,22 @@ const ChatInterface = () => {
               )}
             </div>
           ))}
-           {isLoading && messages[messages.length-1]?.sender === 'user' && (
+           { (isLoading || isFetchingContext) && messages[messages.length-1]?.sender === 'user' && !messages.some(m => m.sender === 'context-info' && m.text.includes('Checking')) && (
              <div className="flex items-end gap-2 justify-start">
                 <Avatar className="h-8 w-8">
                     <AvatarImage src="https://placehold.co/40x40.png" alt="PawPal AI" data-ai-hint="robot dog" />
                     <AvatarFallback><Bot size={18}/></AvatarFallback>
                 </Avatar>
                 <div className="max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap bg-card text-card-foreground border">
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" /> 
+                    {isFetchingContext && <span className="ml-2 text-xs italic">Checking community discussions...</span>}
                 </div>
              </div>
            )}
         </div>
       </ScrollArea>
 
-      {showSuggestions && messages.length === 0 && !isLoading && (
+      {showSuggestions && messages.length === 0 && !isLoading && !isFetchingContext && (
         <div className="p-4 border-t bg-background/50">
           <p className="text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
             <HelpCircle size={16} />
@@ -302,11 +349,11 @@ const ChatInterface = () => {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask PawPal..."
           className="flex-grow focus-visible:ring-primary bg-card"
-          disabled={isLoading}
+          disabled={isLoading || isFetchingContext}
           aria-label="Chat input"
         />
-        <Button type="submit" disabled={isLoading || !input.trim()} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        <Button type="submit" disabled={isLoading || isFetchingContext || !input.trim()} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+          {(isLoading || isFetchingContext) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           <span className="ml-2 hidden sm:inline">Send</span>
         </Button>
       </form>
@@ -315,3 +362,4 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
+
