@@ -136,25 +136,27 @@ const ChatInterface = () => {
     let actualRedditContextWasAddedToPrompt = false; 
 
     const lowerCaseMessage = messageText.toLowerCase();
-    // More generic keywords, specific topic check in API now
-    const redditKeywords = ["recommend", "advice", "best", "what to do", "experience", "tijuana", "skunk", "beach", "shelter", "foster", "hike", "stray", "cost", "affordable", "help", "tip"];
+    // Keywords that might benefit from Reddit context
+    const redditKeywords = ["recommend", "advice", "best", "what to do", "experience", "tijuana", "skunk", "beach", "shelter", "foster", "hike", "stray", "cost", "affordable", "help", "tip", "vet", "park", "emergency", "found pet"];
     
     if (redditKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
       const { redditContext, source } = await fetchRedditContext(messageText); 
-      console.log('[ChatInterface] Fetched Reddit Context for augmentation:', redditContext, 'Source:', source);
+      console.log(`[ChatInterface] Fetched Reddit Context for augmentation: ${redditContext} Source: ${source}`);
 
-      if (redditContext && source && source !== 'none' &&
-          !redditContext.includes("Could not fetch specific Reddit context") && 
-          !redditContext.includes("No specific discussions found") &&
-          !redditContext.includes("Could not find specific community discussions")) {
-        
-        const sourceLabel = source === 'r/sandiego' ? 'r/sandiego' : 'general Reddit';
+      const isContextValid = redditContext && 
+                             source && source !== 'none' &&
+                             !redditContext.includes("Could not fetch Reddit context at this time") && 
+                             !redditContext.includes("No specific discussions found") &&
+                             !redditContext.includes("Could not find specific community discussions");
+
+      if (isContextValid) {
+        const sourceLabel = source === 'r/sandiego' ? 'r/sandiego' : 'general Reddit community discussions';
         augmentedMessage = `${messageText}\n\nConsider this from recent community discussions on ${sourceLabel}:\n${redditContext}`;
         setMessages((prev) => [...prev, {id: `context_added_${Date.now()}`, text: `ℹ️ I've included some recent insights from ${sourceLabel} in my considerations.`, sender: 'context-info', timestamp: new Date()}]);
         actualRedditContextWasAddedToPrompt = true; 
         console.log(`[ChatInterface] Reddit context from ${sourceLabel} was added to the prompt. actualRedditContextWasAddedToPrompt = true`);
       } else {
-        console.log('[ChatInterface] Reddit context was not suitable to add to prompt, or was null/empty. actualRedditContextWasAddedToPrompt = false. Context received:', redditContext);
+        console.log(`[ChatInterface] Reddit context was not suitable to add to prompt, or was null/empty. actualRedditContextWasAddedToPrompt = false. Context received: ${redditContext}`);
       }
     } else {
         console.log('[ChatInterface] No Reddit keywords detected in user message, or context fetch was unsuitable.');
@@ -271,14 +273,17 @@ const ChatInterface = () => {
         variant: 'destructive',
       });
       
-      if(aiMessageId){
-        setMessages((prevMessages) =>
-          prevMessages.map((msg) =>
-            msg.id === aiMessageId ? { ...msg, text: `Sorry, I encountered an error: ${errorMessage.substring(0,100)}...` } : msg
-          ).filter(msg => msg.id !== aiMessageId || (msg.id === aiMessageId && msg.text && msg.text.startsWith("Sorry"))) 
-        );
-      } else {
-         const errorPlaceholderMessage: Message = {
+      // Remove the placeholder AI message if an error occurred before any response was streamed for it.
+      // Or update it with an error message.
+      const existingAiMsgIndex = messages.findIndex(msg => msg.id === aiMessageId && msg.text === '');
+      if (existingAiMsgIndex > -1) {
+           setMessages((prevMessages) =>
+            prevMessages.map((msg) =>
+              msg.id === aiMessageId ? { ...msg, text: `Sorry, I encountered an error: ${errorMessage.substring(0,100)}...` } : msg
+            )
+          );
+      } else if (!messages.some(msg => msg.id === aiMessageId)) { // Only add new error if placeholder wasn't there or already replaced
+          const errorPlaceholderMessage: Message = {
             id: `ai_error_${Date.now()}`,
             text: `Sorry, I encountered an error: ${errorMessage.substring(0,100)}...`,
             sender: 'ai',
@@ -404,3 +409,4 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
+
