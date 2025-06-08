@@ -62,7 +62,7 @@ export async function askPawPal(input: AskPawPalInput): Promise<AskPawPalOutput>
 
 const askPawPalPrompt = ai.definePrompt({
   name: 'askPawPalPrompt',
-  model: 'gpt-4o-mini', // Changed model name
+  model: 'openai/gpt-4o-mini', // Reverted to openai/gpt-4o-mini
   input: {schema: AskPawPalInputSchema},
   output: {schema: AskPawPalOutputSchema},
   tools: [searchRedditTool], // Make the tool available

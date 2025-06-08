@@ -32,7 +32,7 @@ export async function getEmergencyContext(input: GetEmergencyContextInput): Prom
 
 const redditContextPrompt = ai.definePrompt({
   name: 'redditContextPrompt',
-  model: 'gpt-4o-mini', // Changed model name
+  model: 'openai/gpt-4o-mini', // Reverted to openai/gpt-4o-mini
   input: {schema: GetEmergencyContextInputSchema},
   output: {schema: GetEmergencyContextOutputSchema},
   prompt: `You are an AI assistant providing supplementary advice for pet emergencies in San Diego.
