@@ -9,7 +9,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Send, User, Bot, Loader2, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-// FeedbackModal and related logic removed as per new direction from reference
 
 interface Message {
   id: string;
@@ -25,7 +24,6 @@ const suggestedQuestionsList = [
   "Find shelters for dog walking.",
 ];
 
-// Function to get or generate a user ID
 const getChatUserId = (): string => {
   let userId = localStorage.getItem('pawpal_chat_user_id');
   if (!userId) {
@@ -49,8 +47,8 @@ const ChatInterface = () => {
   useEffect(() => {
     const id = getChatUserId();
     setChatUserId(id);
-    setShowSuggestions(messages.length === 0); // Show suggestions if no messages loaded initially
-  }, [messages.length]); // Re-evaluate suggestions display when messages change
+    setShowSuggestions(messages.length === 0);
+  }, [messages.length]);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -58,12 +56,11 @@ const ChatInterface = () => {
     }
   }, [messages]);
 
-  // Load conversation history
   useEffect(() => {
     if (!chatUserId) return;
 
     const loadConversation = async () => {
-      setIsLoading(true); // Indicate loading while fetching history
+      setIsLoading(true);
       try {
         const response = await fetch(`/api/chat-history?user_id=${chatUserId}`);
         if (!response.ok) {
@@ -72,24 +69,23 @@ const ChatInterface = () => {
         }
         const data = await response.json();
         if (data.conversation && data.conversation.length > 0) {
-          // Convert timestamps from string to Date objects if necessary
           const formattedConversation = data.conversation.map((msg: any) => ({
             ...msg,
             timestamp: new Date(msg.timestamp),
           }));
           setMessages(formattedConversation);
-          setShowSuggestions(false); // Hide suggestions if history is loaded
+          setShowSuggestions(false);
         } else {
-          setShowSuggestions(true); // Show suggestions if no history
+          setShowSuggestions(true);
         }
       } catch (error: any) {
         console.error('Error loading conversation:', error);
         toast({
-          title: 'Error',
-          description: `Could not load previous chat: ${error.message}`,
+          title: 'Error loading history',
+          description: error.message,
           variant: 'destructive',
         });
-        setShowSuggestions(true); // Show suggestions on error
+        setShowSuggestions(true);
       } finally {
         setIsLoading(false);
       }
@@ -119,7 +115,6 @@ const ChatInterface = () => {
     const aiMessageId = `ai_${Date.now()}`;
     aiMessageIdForErrorHandling = aiMessageId;
 
-    // Add a placeholder for AI message immediately
     setMessages((prev) => [...prev, { id: aiMessageId, text: '', sender: 'ai', timestamp: new Date() }]);
 
     try {
@@ -134,15 +129,23 @@ const ChatInterface = () => {
 
       if (!response.ok) {
         let serverErrorMessage = 'Failed to get response from PawPal.';
+        let errorDetails = '';
         try {
           const errorBody = await response.json();
-          if (errorBody && typeof errorBody.error === 'string') {
-            serverErrorMessage = errorBody.error;
+          if (errorBody && typeof errorBody.details === 'string') {
+            errorDetails = errorBody.details;
+            serverErrorMessage = `PawPal AI service error: ${errorBody.details}`;
+          } else if (errorBody && typeof errorBody.error === 'string') {
+            errorDetails = errorBody.error;
+            serverErrorMessage = `PawPal AI service error: ${errorBody.error}`;
           }
         } catch (parseError) {
           console.warn('Failed to parse error response JSON:', parseError);
+          // serverErrorMessage remains generic if parsing fails
         }
-        throw new Error(serverErrorMessage);
+        // Log the more detailed error if available, otherwise the generic one
+        console.error(`API request failed with status ${response.status}. Error: ${errorDetails || serverErrorMessage}`);
+        throw new Error(errorDetails || serverErrorMessage); // Throw the more specific error if available
       }
       
       if (!response.body) {
@@ -159,7 +162,7 @@ const ChatInterface = () => {
         
         sseBuffer += decoder.decode(value, { stream: true });
         const lines = sseBuffer.split("\n\n");
-        sseBuffer = lines.pop() || ""; // Keep the last partial line
+        sseBuffer = lines.pop() || "";
 
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
@@ -167,19 +170,25 @@ const ChatInterface = () => {
           const raw = line.slice("data: ".length).trim();
 
           if (raw === "[DONE]") {
-            // Server signals completion.
-            // The message is already fully updated by token stream.
-            // We might finalize loading state here if needed.
             console.log("SSE Stream [DONE]");
             continue; 
           }
-          if (raw === "[ERROR]") {
-            console.error("SSE Stream [ERROR]");
-            throw new Error("Server indicated an error in the stream.");
+          // Check if raw starts with [ERROR]
+          if (raw.startsWith("[ERROR]")) {
+            console.error("SSE Stream Error:", raw);
+            const streamedErrorMsg = raw.substring("[ERROR] ".length);
+            // Try to parse if it's JSON, otherwise use as string
+            let finalErrorMsg = "Server indicated an error in the stream.";
+            try {
+              finalErrorMsg = JSON.parse(streamedErrorMsg);
+            } catch (e) {
+              finalErrorMsg = streamedErrorMsg; // Use as is if not JSON
+            }
+            throw new Error(finalErrorMsg);
           }
 
           try {
-            const token = JSON.parse(raw); // Expecting a string token from server
+            const token = JSON.parse(raw);
             if (typeof token === 'string') {
                 currentAiResponseText += token;
                 setMessages((prev) =>
@@ -190,25 +199,23 @@ const ChatInterface = () => {
             }
           } catch (e) {
               console.error("Error parsing token JSON from SSE:", raw, e);
-              // Potentially handle non-JSON data or malformed JSON if server might send it
           }
         }
       }
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Error sending message or processing stream:', error);
       const errorMessage = (error instanceof Error && error.message) 
         ? error.message 
         : 'Could not get response from PawPal. Please try again.';
       toast({
-        title: 'Error',
+        title: 'Chat Error',
         description: errorMessage,
         variant: 'destructive',
       });
-      // Remove or update the placeholder AI message on error
       setMessages((prevMessages) => 
         prevMessages.map(msg => 
           msg.id === aiMessageIdForErrorHandling ? {...msg, text: `Error: ${errorMessage.substring(0,100)}...`} : msg
-        ).filter(msg => !(msg.id === aiMessageIdForErrorHandling && msg.text ==='')) // remove if it was empty
+        ).filter(msg => !(msg.id === aiMessageIdForErrorHandling && msg.text ===''))
       );
     } finally {
       setIsLoading(false);
@@ -245,7 +252,7 @@ const ChatInterface = () => {
               )}
               <div
                 className={cn(
-                  'max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap', // Added whitespace-pre-wrap
+                  'max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap',
                   message.sender === 'user'
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-card text-card-foreground border'
@@ -264,9 +271,6 @@ const ChatInterface = () => {
               )}
             </div>
           ))}
-           {/* This specific loading indicator (when user sent a message but AI hasn't started streaming) 
-               is now handled by the placeholder AI message showing a spinner if its text is empty and isLoading is true.
-           */}
         </div>
       </ScrollArea>
 
@@ -306,7 +310,6 @@ const ChatInterface = () => {
           <span className="ml-2 hidden sm:inline">Send</span>
         </Button>
       </form>
-      {/* FeedbackModal removed */}
     </div>
   );
 };

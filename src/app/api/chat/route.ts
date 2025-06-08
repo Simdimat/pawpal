@@ -1,3 +1,4 @@
+
 // src/app/api/chat/route.ts
 import {NextResponse} from 'next/server';
 import type {NextRequest} from 'next/server';
@@ -11,9 +12,13 @@ const openai = new OpenAI({
 const ASSISTANT_ID = process.env.ASSISTANT_ID;
 
 if (!ASSISTANT_ID) {
+  // This error will stop the server/route from loading if ASSISTANT_ID is missing
+  console.error("CRITICAL: ASSISTANT_ID environment variable is not set.");
   throw new Error("ASSISTANT_ID environment variable is not set.");
 }
 if (!process.env.OPENAI_API_KEY) {
+  // This error will stop the server/route from loading if OPENAI_API_KEY is missing
+  console.error("CRITICAL: OPENAI_API_KEY environment variable is not set.");
   throw new Error("OPENAI_API_KEY environment variable is not set.");
 }
 
@@ -22,6 +27,10 @@ function sleep(ms: number) {
 }
 
 export async function POST(request: NextRequest) {
+  console.log('[API Chat] POST request received.');
+  console.log(`[API Chat] OPENAI_API_KEY is set: ${!!process.env.OPENAI_API_KEY}`);
+  console.log(`[API Chat] ASSISTANT_ID: ${process.env.ASSISTANT_ID}`);
+
   try {
     const body = await request.json();
     const { user_id, message } = body;
@@ -50,31 +59,38 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         const encoder = new TextEncoder();
+        try {
+          const run = await openai.beta.threads.runs.createAndPoll(threadId, {
+            assistant_id: ASSISTANT_ID!, // Added non-null assertion as it's checked above
+            stream: true,
+          });
+          
+          console.log(`[API Chat] Run created for thread ${threadId}, status: ${run.status}`);
 
-        const run = await openai.beta.threads.runs.createAndPoll(threadId, {
-          assistant_id: ASSISTANT_ID,
-          stream: true,
-        });
-        
-        console.log(`[API Chat] Run created for thread ${threadId}, status: ${run.status}`);
-
-        for await (const event of run) {
-          if (event.event === 'thread.message.delta') {
-            const delta = event.data.delta.content?.[0];
-            if (delta?.type === 'text' && delta.text?.value) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(delta.text.value)}\n\n`));
+          for await (const event of run) {
+            if (event.event === 'thread.message.delta') {
+              const delta = event.data.delta.content?.[0];
+              if (delta?.type === 'text' && delta.text?.value) {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(delta.text.value)}\n\n`));
+              }
+            } else if (event.event === 'thread.run.completed') {
+              console.log(`[API Chat] Run completed for thread ${threadId}`);
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+              controller.close();
+              break;
+            } else if (event.event === 'thread.run.failed' || event.event === 'thread.run.cancelled' || event.event === 'thread.run.expired') {
+              console.error(`[API Chat] Run failed/cancelled/expired for thread ${threadId}. Status: ${event.data.status}`, event.data.last_error);
+              const runError = event.data.last_error?.message || 'Run failed or was cancelled.';
+              controller.enqueue(encoder.encode(`data: [ERROR] ${JSON.stringify(runError)}\n\n`));
+              controller.close();
+              break;
             }
-          } else if (event.event === 'thread.run.completed') {
-            console.log(`[API Chat] Run completed for thread ${threadId}`);
-            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-            controller.close();
-            break;
-          } else if (event.event === 'thread.run.failed' || event.event === 'thread.run.cancelled' || event.event === 'thread.run.expired') {
-            console.error(`[API Chat] Run failed/cancelled/expired for thread ${threadId}. Status: ${event.data.status}`, event.data.last_error);
-            controller.enqueue(encoder.encode('data: [ERROR] Run failed or was cancelled.\n\n'));
-            controller.close();
-            break;
           }
+        } catch (streamError: any) {
+            const errorMessageText = streamError instanceof Error ? streamError.message : String(streamError);
+            console.error('[API Chat] Error during stream processing:', errorMessageText, streamError.stack);
+            controller.enqueue(encoder.encode(`data: [ERROR] ${JSON.stringify(`Stream error: ${errorMessageText.substring(0,150)}`)}\n\n`));
+            controller.close();
         }
       },
     });
@@ -88,13 +104,31 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : undefined;
-    console.error('--- OpenAI Assistant API Error (src/app/api/chat/route.ts) ---');
-    console.error('Message:', errorMessage);
-    if (errorStack) console.error('Stack:', errorStack);
-    if (!(error instanceof Error)) console.error('Full error object:', error);
-    console.error('--- End OpenAI Assistant API Error ---');
-    return NextResponse.json({ error: `Failed to get response from Assistant. ${errorMessage}` }, { status: 500 });
+    let errorMessage = "An unknown error occurred with the Assistant API.";
+    let errorDetails = "";
+
+    if (error instanceof OpenAI.APIError) {
+      console.error('--- OpenAI APIError Details (src/app/api/chat/route.ts) ---');
+      console.error('Status:', error.status);
+      console.error('Message:', error.message);
+      console.error('Code:', error.code);
+      console.error('Type:', error.type);
+      errorMessage = `OpenAI API Error: ${error.message}`;
+      errorDetails = `Status: ${error.status}, Code: ${error.code}, Type: ${error.type}`;
+    } else if (error instanceof Error) {
+      console.error('--- Generic Error (src/app/api/chat/route.ts) ---');
+      console.error('Message:', error.message);
+      if (error.stack) console.error('Stack:', error.stack);
+      errorMessage = error.message;
+    } else {
+      console.error('--- Unknown Error (src/app/api/chat/route.ts) ---');
+      console.error('Full error object:', error);
+      errorDetails = String(error);
+    }
+    
+    return NextResponse.json(
+      { error: "Failed to get response from Assistant.", details: errorMessage, verboseDetails: errorDetails },
+      { status: 500 }
+    );
   }
 }
