@@ -28,11 +28,14 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { user_id, message } = body;
+    const { user_id, message } = body; // message here is the potentially augmented message from client
 
     if (!user_id || !message) {
       return NextResponse.json({ error: 'Missing user_id or message' }, { status: 400 });
     }
+    
+    console.log('[API Chat] Received in request body - FULL message (potentially augmented):', JSON.stringify(message, null, 2));
+
 
     let threadId = userThreads[user_id]?.thread_id;
 
@@ -46,9 +49,24 @@ export async function POST(request: NextRequest) {
       console.log(`[API Chat] Using existing thread for user ${user_id}: ${threadId}`);
     }
 
+    // Log specifically if Reddit context appears to be in the message
+    const messageContentString = typeof message === 'string' ? message : JSON.stringify(message);
+    const hasSandiegoRedditContext = messageContentString.includes("Consider this from recent community discussions on r/sandiego:");
+    const hasGeneralRedditContext = messageContentString.includes("Consider this from recent community discussions on general Reddit community discussions:");
+
+    if (hasSandiegoRedditContext) {
+      console.log("[API Chat] Message to OpenAI APPEARS TO INCLUDE r/sandiego Reddit context.");
+    } else if (hasGeneralRedditContext) {
+      console.log("[API Chat] Message to OpenAI APPEARS TO INCLUDE general Reddit context.");
+    } else {
+      console.log("[API Chat] Message to OpenAI DOES NOT appear to include specific Reddit context headers.");
+    }
+    
+    console.log(`[API Chat] Creating message in thread ${threadId} for user ${user_id}. Full content string being sent to OpenAI:`, JSON.stringify(messageContentString, null, 2));
+
     await openai.beta.threads.messages.create(threadId, {
       role: 'user',
-      content: message,
+      content: messageContentString, // Send the potentially augmented message
     });
 
     const stream = new ReadableStream({
@@ -57,7 +75,6 @@ export async function POST(request: NextRequest) {
         try {
           const runStream = await openai.beta.threads.runs.createAndStream(threadId, {
             assistant_id: assistantId,
-            // model: 'gpt-4o-mini', // Rely on assistant's configuration
           });
           
           console.log(`[API Chat] Run stream initiated for thread ${threadId}.`);
@@ -134,3 +151,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+    
