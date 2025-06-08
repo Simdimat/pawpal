@@ -62,7 +62,7 @@ export async function askPawPal(input: AskPawPalInput): Promise<AskPawPalOutput>
 
 const askPawPalPrompt = ai.definePrompt({
   name: 'askPawPalPrompt',
-  model: 'googleai/gemini-pro', 
+  model: 'googleai/gemini-1.0-pro', 
   input: {schema: AskPawPalInputSchema},
   output: {schema: AskPawPalOutputSchema},
   tools: [searchRedditTool], 
@@ -105,3 +105,4 @@ const askPawPalFlow = ai.defineFlow(
     return output!;
   }
 );
+
