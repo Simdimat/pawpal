@@ -62,10 +62,10 @@ export async function askPawPal(input: AskPawPalInput): Promise<AskPawPalOutput>
 
 const askPawPalPrompt = ai.definePrompt({
   name: 'askPawPalPrompt',
-  model: 'openai/gpt-4o-mini', // Reverted to openai/gpt-4o-mini
+  model: 'gpt-3.5-turbo', // Changed for diagnostics
   input: {schema: AskPawPalInputSchema},
   output: {schema: AskPawPalOutputSchema},
-  tools: [searchRedditTool], // Make the tool available
+  tools: [searchRedditTool], 
   prompt: `You are PawPal SD, a friendly and knowledgeable AI assistant for pet owners in San Diego. Provide concise, helpful, and locally relevant information to answer the user's question.
 
 Question: {{{question}}}
@@ -98,8 +98,6 @@ const askPawPalFlow = ai.defineFlow(
     outputSchema: AskPawPalOutputSchema,
   },
   async (input) => {
-    // The 'redditContext' field in AskPawPalInput is now deprecated in favor of the tool.
-    // We don't need to explicitly pass it if the AI uses the tool.
     const { question, yelpContext, petfinderContext } = input;
     const flowInput = { question, yelpContext, petfinderContext };
 
@@ -107,4 +105,3 @@ const askPawPalFlow = ai.defineFlow(
     return output!;
   }
 );
-
