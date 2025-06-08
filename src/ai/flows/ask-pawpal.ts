@@ -10,7 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { retrieveEmergencyFlowData } from '@/lib/emergency-data-loader'; // Helper to load JSON
+import { retrieveEmergencyFlowData } from '@/lib/emergency-data-loader'; 
 
 const AskPawPalInputSchema = z.object({
   question: z.string().describe('The user\'s question for PawPal SD.'),
@@ -20,13 +20,9 @@ export type AskPawPalInput = z.infer<typeof AskPawPalInputSchema>;
 
 const AskPawPalOutputSchema = z.object({
   answer: z.string().describe('PawPal SD\'s answer to the question.'),
-  // For future UI enhancements:
-  // scrollToSection: z.string().optional().describe('Optional ID of a page section to scroll to.'),
-  // structuredData: z.any().optional().describe('Optional structured data for custom rendering.'),
 });
 export type AskPawPalOutput = z.infer<typeof AskPawPalOutputSchema>;
 
-// Tool to get emergency information
 const getEmergencyInfoTool = ai.defineTool(
   {
     name: 'getEmergencyInfoTool',
@@ -55,12 +51,10 @@ const getEmergencyInfoTool = ai.defineTool(
         contacts = skunkFlow.relevantContacts || [];
         immediate = skunkFlow.immediateActions || [];
       }
-      // Simulated Reddit/Community advice
       advice = 'Many pet owners and vets recommend a de-skunking solution made of hydrogen peroxide, baking soda, and dish soap. Always avoid the eyes. It\'s a good idea to have a skunk emergency kit prepared if you live in an area with skunks. Wash your pet outdoors if possible to prevent the smell from spreading inside your home.';
       return { adviceSummary: advice, staticSteps: steps, relevantContacts: contacts, immediateActions: immediate };
     }
     
-    // Placeholder for other emergencies
     return { 
       adviceSummary: `For ${input.emergencyType}, it's always best to contact your veterinarian or an emergency pet hospital immediately. I can provide general first aid information if you specify the emergency.`,
       staticSteps: [],
@@ -75,11 +69,10 @@ const askPawPalFlow = ai.defineFlow(
     name: 'askPawPalFlow',
     inputSchema: AskPawPalInputSchema,
     outputSchema: AskPawPalOutputSchema,
-    // Ensure tools are available to the flow
     tools: [getEmergencyInfoTool],
   },
   async (input) => {
-    const model = 'googleai/gemini-1.5-flash-latest';
+    const model = 'googleai/gemini-1.0-pro'; // State before "Genkit Foundation for Chatbot"
     
     const prompt = `You are PawPal SD, a friendly and expert AI assistant for pet owners in San Diego.
 User's Question: "${input.question}"
@@ -104,36 +97,29 @@ Keep your answers clear, empathetic, and focused on the user's needs.
     const llmResponse = await ai.generate({
       model: model,
       prompt: prompt,
-      tools: [getEmergencyInfoTool], // Make tool available to this specific generation call
+      tools: [getEmergencyInfoTool], 
       output: {
-        format: 'json', // Request JSON if you want to parse structured output, otherwise 'text'
-        schema: AskPawPalOutputSchema, // Optional: guide the LLM to produce output matching this schema
+        format: 'json', 
+        schema: AskPawPalOutputSchema, 
       },
-       // Optional: Add safety settings if needed, though defaults are usually fine for this type of content
        config: {
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
           { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
           { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
-          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' }, // Allow some general advice that might be "dangerous" if misinterpreted, but block high harm.
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' }, 
         ],
       },
     });
 
-    // If output format is JSON and schema is provided, llmResponse.output should be structured
     const output = llmResponse.output();
 
     if (output) {
       return output;
     }
 
-    // Fallback if structured output fails or if text format was used
     let answerText = llmResponse.text();
     
-    // If tools were called, their output is available in llmResponse.toolRequests and llmResponse.toolResponses
-    // The main prompt already instructs the LLM to synthesize this, so 'answerText' should ideally contain the synthesized result.
-    // For more complex synthesis, you might need to manually combine llmResponse.text() with tool_outputs if the LLM doesn't do it well.
-
     return { answer: answerText || "I'm sorry, I couldn't generate a response for that. Please try rephrasing your question." };
   }
 );

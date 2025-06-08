@@ -25,10 +25,10 @@ const suggestedQuestionsList = [
 ];
 
 const getChatUserId = (): string => {
-  let userId = localStorage.getItem('pawpal_chat_user_id_genkit'); // Use a new key for Genkit chat
+  let userId = localStorage.getItem('pawpal_chat_user_id'); 
   if (!userId) {
-    userId = `user_genkit_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    localStorage.setItem('pawpal_chat_user_id_genkit', userId);
+    userId = `user_openai_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    localStorage.setItem('pawpal_chat_user_id', userId);
   }
   return userId;
 };
@@ -47,10 +47,42 @@ const ChatInterface = () => {
   useEffect(() => {
     const id = getChatUserId();
     setChatUserId(id);
-    // For Genkit, we are not loading history initially in Phase 1
-    // setShowSuggestions will be true if messages array is empty.
-    setShowSuggestions(messages.length === 0);
-  }, [messages.length]);
+
+    const loadHistory = async (currentUserId: string) => {
+      if (!currentUserId) return;
+      setIsLoading(true);
+      try {
+        const response = await fetch(`/api/chat-history?user_id=${encodeURIComponent(currentUserId)}`);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: "Failed to parse history error" }));
+          throw new Error(errorData.error || `Failed to load chat history. Status: ${response.status}`);
+        }
+        const data = await response.json();
+        if (data.conversation && data.conversation.length > 0) {
+          setMessages(data.conversation.map((msg: any) => ({
+            id: msg.id,
+            text: msg.text,
+            sender: msg.sender,
+            timestamp: new Date(msg.timestamp),
+          })));
+          setShowSuggestions(false);
+        } else {
+          setShowSuggestions(true);
+        }
+      } catch (error) {
+        console.error('Error loading chat history:', error);
+        toast({ title: 'History Error', description: (error as Error).message, variant: 'destructive' });
+        setShowSuggestions(true);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (id) {
+        loadHistory(id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); 
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -73,18 +105,17 @@ const ChatInterface = () => {
     }
     setIsLoading(true);
     if (showSuggestions) setShowSuggestions(false);
+    let aiMessageId = `ai_${Date.now()}`; // Define here for access in catch/finally
 
     try {
-      const response = await fetch('/api/genkit-chat', { // Updated API endpoint
+      const response = await fetch('/api/chat', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          chatUserId: chatUserId, // Pass chatUserId
-          question: messageText,
-         }),
+          user_id: chatUserId,
+          message: messageText,
+        }),
       });
-
-      setIsLoading(false); // Set loading to false after fetch completes
 
       if (!response.ok) {
         let serverErrorMessage = 'Failed to get response from PawPal.';
@@ -93,51 +124,92 @@ const ChatInterface = () => {
           const errorBody = await response.json();
           serverErrorMessage = errorBody.error || serverErrorMessage;
           if (errorBody.details) {
-            errorDetails += ` - Details: ${errorBody.details}`;
+            errorDetails = `${serverErrorMessage} - Details: ${errorBody.details}`;
+          } else {
+            errorDetails = serverErrorMessage;
           }
         } catch (parseError) {
           console.warn('Failed to parse error response JSON:', parseError);
-          errorDetails += ` - Response body: ${await response.text()}`;
         }
-        console.error(`API request failed. ${errorDetails}`);
-        throw new Error(`${serverErrorMessage} (${errorDetails})`);
+        throw new Error(errorDetails || serverErrorMessage);
       }
       
-      const data = await response.json();
-      
-      if (data.answer) {
-        const aiMessage: Message = {
-          id: `ai_${Date.now()}`,
-          text: data.answer,
-          sender: 'ai',
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, aiMessage]);
-      } else {
-        throw new Error('Received an empty answer from PawPal AI.');
+      if (!response.body) {
+        throw new Error('Response body is null. Cannot process stream.');
       }
 
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let aiPartialResponse = '';
+      
+      const aiPlaceholderMessage: Message = {
+        id: aiMessageId,
+        text: '', 
+        sender: 'ai',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, aiPlaceholderMessage]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const raw = line.substring('data: '.length).trim();
+            if (raw === '[DONE]') {
+              break;
+            }
+            if (raw.startsWith("[ERROR]")) {
+              console.error("SSE Stream Error:", raw);
+              const streamedErrorMsg = raw.substring("[ERROR] ".length);
+              let finalErrorMsg = "Server indicated an error in the stream.";
+              try {
+                  const parsedError = JSON.parse(streamedErrorMsg);
+                  finalErrorMsg = parsedError.message || parsedError.error || streamedErrorMsg;
+              } catch (e) {
+                  finalErrorMsg = streamedErrorMsg;
+              }
+              throw new Error(`Stream Error: ${finalErrorMsg}`);
+            }
+            try {
+              const token = JSON.parse(raw);
+              aiPartialResponse += token;
+              setMessages((prevMessages) =>
+                prevMessages.map((msg) =>
+                  msg.id === aiMessageId ? { ...msg, text: aiPartialResponse } : msg
+                )
+              );
+            } catch (e) {
+              console.warn('Failed to parse token JSON from stream:', raw, e);
+            }
+          }
+        }
+      }
     } catch (error) {
-      setIsLoading(false);
       console.error('Error sending message or processing response:', error);
       const errorMessage = (error instanceof Error && error.message) 
         ? error.message 
         : 'Could not get response from PawPal. Please try again.';
       toast({
         title: 'Chat Error',
-        description: errorMessage.substring(0, 300), // Limit length of toast description
+        description: errorMessage.substring(0, 300),
         variant: 'destructive',
       });
-      // Optionally add an error message to the chat
-      const aiErrorMessage: Message = {
-        id: `ai_error_${Date.now()}`,
-        text: `Sorry, I encountered an error: ${errorMessage.substring(0,100)}...`,
-        sender: 'ai',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, aiErrorMessage]);
+      setMessages((prevMessages) =>
+        prevMessages.map((msg) =>
+          msg.id === aiMessageId ? { ...msg, text: `Sorry, I encountered an error: ${errorMessage.substring(0,100)}...` } : msg
+        ).filter(msg => msg.id !== aiMessageId || (msg.id === aiMessageId && msg.text && msg.text.startsWith("Sorry"))) 
+      );
+    } finally {
+      setIsLoading(false);
     }
   };
+
 
   const handleFormSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -146,7 +218,7 @@ const ChatInterface = () => {
 
   const handleSuggestionClick = async (question: string) => {
     setShowSuggestions(false);
-    await processAndSendMessage(question);
+    setInput(question); 
   };
 
   return (
@@ -175,7 +247,7 @@ const ChatInterface = () => {
                     : 'bg-card text-card-foreground border'
                 )}
               >
-                {message.text || (message.sender === 'ai' && isLoading && messages[messages.length -1]?.id === message.id && <Loader2 className="h-4 w-4 animate-spin" />)}
+                {message.text || (message.sender === 'ai' && isLoading && messages.length > 0 && messages[messages.length -1]?.id === message.id && <Loader2 className="h-4 w-4 animate-spin" />)}
                  <p className="text-xs opacity-70 mt-1 text-right">
                     {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </p>
