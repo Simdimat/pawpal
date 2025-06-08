@@ -10,7 +10,9 @@ const getNewAccessToken = async (): Promise<string> => {
   const client_secret = process.env.REDDIT_CLIENT_SECRET;
   const userAgent = process.env.REDDIT_USER_AGENT || 'PawPalSD/1.0 (by u/SDAutomatIon)';
 
+  console.log('[RedditService] Attempting to get new access token.');
   if (!client_id || !client_secret) {
+    console.error('[RedditService] Reddit Client ID or Client Secret not configured.');
     throw new Error('Reddit Client ID and Client Secret not configured.');
   }
 
@@ -32,10 +34,10 @@ const getNewAccessToken = async (): Promise<string> => {
     const { access_token, expires_in } = response.data;
     redditAccessToken = access_token;
     tokenExpirationTime = Math.floor(Date.now() / 1000) + expires_in - 60; // Refresh 60 seconds before expiry
-    console.log('Successfully acquired new Reddit access token.');
+    console.log('[RedditService] Successfully acquired new Reddit access token.');
     return access_token;
-  } catch (error) {
-    console.error('Error getting new Reddit access token:', error);
+  } catch (error: any) {
+    console.error('[RedditService] Error getting new Reddit access token:', error.response?.data || error.message);
     throw new Error('Failed to get new Reddit access token.');
   }
 };
@@ -49,7 +51,7 @@ export async function makeAuthenticatedRedditRequest(
   try {
     const currentTime = Math.floor(Date.now() / 1000);
     if (!redditAccessToken || !tokenExpirationTime || currentTime >= tokenExpirationTime) {
-      console.log('Reddit access token expired or not available. Getting a new one...');
+      console.log('[RedditService] Reddit access token expired or not available. Getting a new one...');
       await getNewAccessToken();
     }
 
@@ -64,7 +66,7 @@ export async function makeAuthenticatedRedditRequest(
     });
     return response.data;
   } catch (error) {
-    console.error('Error making authenticated Reddit request:', error);
+    console.error('[RedditService] Error making authenticated Reddit request:', error);
     throw error;
   }
 }
@@ -101,27 +103,27 @@ interface RedditSearchResponse {
 
 export async function searchReddit(
   query: string,
-  subreddits?: string[], // Optional: for broader search if primarySubreddit is not used
-  limit: number = 3, // Reduced default for more focused context
+  subreddits?: string[], 
+  limit: number = 5, // Default limit increased slightly for initial fetch
   sort: 'relevance' | 'hot' | 'top' | 'new' | 'comments' = 'relevance',
   timeframe: 'hour' | 'day' | 'week' | 'month' | 'year' | 'all' = 'year',
-  primarySubreddit?: string // New parameter to target a specific subreddit
+  primarySubreddit?: string 
 ): Promise<RedditPost[]> {
   let url: string;
   let searchParams: URLSearchParams;
 
+  console.log(`[RedditService] Searching Reddit. Query: "${query}", Primary Subreddit: ${primarySubreddit}, Limit: ${limit}`);
+
   if (primarySubreddit) {
-    // Search within a specific subreddit
     url = `https://oauth.reddit.com/r/${primarySubreddit}/search.json`;
     searchParams = new URLSearchParams({
       q: query,
-      restrict_sr: '1', // Restrict search to this subreddit
+      restrict_sr: '1', 
       limit: limit.toString(),
       sort,
       t: timeframe,
     });
   } else if (subreddits && subreddits.length > 0) {
-    // Broader search across specified subreddits using query syntax
     const subredditQueryPart = subreddits.map(sr => `subreddit:${sr}`).join(' OR ');
     const fullQuery = `${query} (${subredditQueryPart})`;
     url = `https://oauth.reddit.com/search.json`;
@@ -130,10 +132,9 @@ export async function searchReddit(
       limit: limit.toString(),
       sort,
       t: timeframe,
-      restrict_sr: '0', // Do not restrict to a single SR if multiple are in query
+      restrict_sr: '0', 
     });
   } else {
-    // General search across all of Reddit if no subreddits specified
     url = `https://oauth.reddit.com/search.json`;
     searchParams = new URLSearchParams({
       q: query,
@@ -144,15 +145,22 @@ export async function searchReddit(
   }
   
   const fullUrl = `${url}?${searchParams.toString()}`;
+  console.log(`[RedditService] Fetching URL: ${fullUrl}`);
 
   try {
     const responseData: RedditSearchResponse = await makeAuthenticatedRedditRequest(fullUrl, 'GET');
     if (responseData && responseData.data && responseData.data.children) {
+      if (responseData.data.children.length === 0) {
+        console.log(`[RedditService] Reddit search for "${query}" on "${primarySubreddit || 'all'}" returned 0 results.`);
+      } else {
+        console.log(`[RedditService] Reddit search for "${query}" on "${primarySubreddit || 'all'}" returned ${responseData.data.children.length} results.`);
+      }
       return responseData.data.children.map(child => child.data);
     }
+    console.log(`[RedditService] Reddit search for "${query}" on "${primarySubreddit || 'all'}" returned no data.children.`);
     return [];
-  } catch (error) {
-    console.error(`Error searching Reddit for "${query}":`, error);
+  } catch (error: any) {
+    console.error(`[RedditService] Error searching Reddit for "${query}":`, error.response?.data || error.message);
     return []; 
   }
 }

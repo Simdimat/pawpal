@@ -99,15 +99,16 @@ const ChatInterface = () => {
     try {
       const response = await fetch(`/api/reddit-context?query=${encodeURIComponent(query)}`);
       if (!response.ok) {
-        console.warn('Failed to fetch Reddit context, proceeding without it.');
+        console.warn('[ChatInterface] Failed to fetch Reddit context, API responded with non-OK status:', response.status);
         setMessages(prev => prev.filter(m => m.id !== contextMsgId)); 
         return null;
       }
       const data = await response.json();
+      console.log('[ChatInterface] Data from /api/reddit-context:', data);
       setMessages(prev => prev.filter(m => m.id !== contextMsgId)); 
       return data.redditContext || null;
     } catch (error) {
-      console.error('Error fetching Reddit context:', error);
+      console.error('[ChatInterface] Error fetching Reddit context:', error);
       setMessages(prev => prev.filter(m => m.id !== contextMsgId)); 
       return null;
     } finally {
@@ -132,20 +133,27 @@ const ChatInterface = () => {
     if (showSuggestions) setShowSuggestions(false);
     
     let augmentedMessage = messageText;
-    let actualRedditContextWasAddedToPrompt = false; // Flag for this specific turn
+    let actualRedditContextWasAddedToPrompt = false; 
 
     const lowerCaseMessage = messageText.toLowerCase();
-    const redditKeywords = ["tijuana vet", "skunk", "dog beach", "shelter", "foster", "hike", "stray cat", "pet care seniors", "low-cost vet", "crowded"];
+    const redditKeywords = ["tijuana vet", "skunk", "dog beach", "shelter", "foster", "hike", "stray cat", "pet care seniors", "low-cost vet", "crowded", "recommendations", "best", "advice on", "what to do"];
     
     if (redditKeywords.some(keyword => lowerCaseMessage.includes(keyword))) {
       const redditContext = await fetchRedditContext(messageText); 
+      console.log('[ChatInterface] Fetched Reddit Context for augmentation:', redditContext);
+
       if (redditContext && 
           !redditContext.includes("Could not fetch specific Reddit context") && 
           !redditContext.includes("No specific discussions found on r/sandiego for this topic recently.")) {
         augmentedMessage = `${messageText}\n\nConsider this from recent community discussions on r/sandiego:\n${redditContext}`;
         setMessages((prev) => [...prev, {id: `context_added_${Date.now()}`, text: "ℹ️ I've included some recent insights from r/sandiego in my considerations.", sender: 'context-info', timestamp: new Date()}]);
         actualRedditContextWasAddedToPrompt = true; 
+        console.log('[ChatInterface] Reddit context was added to the prompt. actualRedditContextWasAddedToPrompt = true');
+      } else {
+        console.log('[ChatInterface] Reddit context was not suitable to add to prompt, or was null/empty. actualRedditContextWasAddedToPrompt = false. Context received:', redditContext);
       }
+    } else {
+        console.log('[ChatInterface] No Reddit keywords detected in user message.');
     }
     
     setIsLoading(true);
@@ -165,9 +173,9 @@ const ChatInterface = () => {
         let serverErrorMessage = 'Failed to get response from PawPal.';
         try {
           const errorBody = await response.json();
-          serverErrorMessage = errorBody.error || (errorBody.details ? `${errorBody.details} (Status: ${response.status})` : serverErrorMessage);
+          serverErrorMessage = errorBody.details || errorBody.error || (errorBody.verboseErrorDetails ? `${errorBody.verboseErrorDetails} (Status: ${response.status})` : serverErrorMessage);
         } catch (parseError) {
-          console.warn('Failed to parse error response JSON:', parseError);
+          console.warn('[ChatInterface] Failed to parse error response JSON:', parseError);
         }
         throw new Error(serverErrorMessage);
       }
@@ -202,18 +210,18 @@ const ChatInterface = () => {
           if (line.startsWith('data: ')) {
             const raw = line.substring('data: '.length).trim();
             if (raw === '[DONE]') {
-              doneStreaming = true;
+              doneStreaming = true; // Set flag to break outer loop
               break; 
             }
             if (raw.startsWith("[ERROR]")) {
-              console.error("SSE Stream Error:", raw);
+              console.error("[ChatInterface] SSE Stream Error:", raw);
               const streamedErrorMsg = raw.substring("[ERROR] ".length);
               let finalErrorMsg = "Server indicated an error in the stream.";
               try {
-                  const parsedError = JSON.parse(streamedErrorMsg);
-                  finalErrorMsg = parsedError.message || parsedError.error || streamedErrorMsg;
+                  const parsedError = JSON.parse(streamedErrorMsg); // errors from Assistant API can be JSON
+                  finalErrorMsg = parsedError.message || parsedError.error || parsedError.detail || streamedErrorMsg;
               } catch (e) {
-                  finalErrorMsg = streamedErrorMsg;
+                  finalErrorMsg = streamedErrorMsg; // Or just the raw string if not JSON
               }
               throw new Error(`Stream Error: ${finalErrorMsg}`);
             }
@@ -226,18 +234,21 @@ const ChatInterface = () => {
                 )
               );
             } catch (e) {
-              console.warn('Failed to parse token JSON from stream:', raw, e);
+              console.warn('[ChatInterface] Failed to parse token JSON from stream:', raw, e);
             }
           }
         }
          if (doneStreaming) break; 
       }
 
-      // After the loop, aiPartialResponse has the full AI text. Append if Reddit context was used.
       let finalAiText = aiPartialResponse;
       if (actualRedditContextWasAddedToPrompt) {
         finalAiText += " (Derived from reddit!)";
+        console.log('[ChatInterface] Appending "(Derived from reddit!)" to AI response.');
+      } else {
+        console.log('[ChatInterface] Not appending "(Derived from reddit!)" as actualRedditContextWasAddedToPrompt is false.');
       }
+
 
       setMessages((prevMessages) =>
         prevMessages.map((msg) =>
@@ -246,7 +257,7 @@ const ChatInterface = () => {
       );
 
     } catch (error) {
-      console.error('Error sending message or processing response:', error);
+      console.error('[ChatInterface] Error sending message or processing response:', error);
       const errorMessage = (error instanceof Error && error.message) 
         ? error.message 
         : 'Could not get response from PawPal. Please try again.';
@@ -255,7 +266,7 @@ const ChatInterface = () => {
         description: errorMessage.substring(0, 300),
         variant: 'destructive',
       });
-      // Ensure aiMessageId is defined before trying to update/filter based on it
+      
       if(aiMessageId){
         setMessages((prevMessages) =>
           prevMessages.map((msg) =>
@@ -263,7 +274,6 @@ const ChatInterface = () => {
           ).filter(msg => msg.id !== aiMessageId || (msg.id === aiMessageId && msg.text && msg.text.startsWith("Sorry"))) 
         );
       } else {
-         // Fallback if aiMessageId was not set (should not happen if placeholder was added)
          const errorPlaceholderMessage: Message = {
             id: `ai_error_${Date.now()}`,
             text: `Sorry, I encountered an error: ${errorMessage.substring(0,100)}...`,
@@ -390,4 +400,3 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
-
