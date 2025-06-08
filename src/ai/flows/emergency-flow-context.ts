@@ -32,7 +32,7 @@ export async function getEmergencyContext(input: GetEmergencyContextInput): Prom
 
 const redditContextPrompt = ai.definePrompt({
   name: 'redditContextPrompt',
-  model: 'gpt-3.5-turbo', 
+  model: 'googleai/gemini-1.5-flash-latest', 
   input: {schema: GetEmergencyContextInputSchema},
   output: {schema: GetEmergencyContextOutputSchema},
   prompt: `You are an AI assistant providing supplementary advice for pet emergencies in San Diego.

@@ -62,7 +62,7 @@ export async function askPawPal(input: AskPawPalInput): Promise<AskPawPalOutput>
 
 const askPawPalPrompt = ai.definePrompt({
   name: 'askPawPalPrompt',
-  model: 'gpt-3.5-turbo', 
+  model: 'googleai/gemini-pro', 
   input: {schema: AskPawPalInputSchema},
   output: {schema: AskPawPalOutputSchema},
   tools: [searchRedditTool], 

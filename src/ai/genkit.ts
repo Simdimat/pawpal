@@ -1,6 +1,8 @@
 import {genkit} from 'genkit';
+import {googleAI} from '@genkit-ai/googleai';
 
-// Configure Genkit.
-// Rely on default behaviors and environment variables.
-// Debug logging can be enabled by setting the GENKIT_LOG_LEVEL=debug environment variable.
-export const ai = genkit();
+// Configure Genkit with Google AI plugin
+export const ai = genkit({
+  plugins: [googleAI()],
+  logLevel: 'debug', // Keep debug logging
+});
