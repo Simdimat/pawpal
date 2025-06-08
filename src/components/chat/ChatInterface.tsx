@@ -18,17 +18,17 @@ interface Message {
 }
 
 const suggestedQuestionsList = [
+  "My dog got sprayed by a skunk! What do I do?",
   "Where's a good dog beach in San Diego?",
   "Recommend low-cost vet services.",
-  "My dog got skunked! What do I do?",
   "Find shelters for dog walking.",
 ];
 
 const getChatUserId = (): string => {
-  let userId = localStorage.getItem('pawpal_chat_user_id');
+  let userId = localStorage.getItem('pawpal_chat_user_id_genkit'); // Use a new key for Genkit chat
   if (!userId) {
-    userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    localStorage.setItem('pawpal_chat_user_id', userId);
+    userId = `user_genkit_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    localStorage.setItem('pawpal_chat_user_id_genkit', userId);
   }
   return userId;
 };
@@ -47,6 +47,8 @@ const ChatInterface = () => {
   useEffect(() => {
     const id = getChatUserId();
     setChatUserId(id);
+    // For Genkit, we are not loading history initially in Phase 1
+    // setShowSuggestions will be true if messages array is empty.
     setShowSuggestions(messages.length === 0);
   }, [messages.length]);
 
@@ -55,44 +57,6 @@ const ChatInterface = () => {
       scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
     }
   }, [messages]);
-
-  useEffect(() => {
-    if (!chatUserId) return;
-
-    const loadConversation = async () => {
-      setIsLoading(true);
-      try {
-        const response = await fetch(`/api/chat-history?user_id=${chatUserId}`);
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to load chat history');
-        }
-        const data = await response.json();
-        if (data.conversation && data.conversation.length > 0) {
-          const formattedConversation = data.conversation.map((msg: any) => ({
-            ...msg,
-            timestamp: new Date(msg.timestamp),
-          }));
-          setMessages(formattedConversation);
-          setShowSuggestions(false);
-        } else {
-          setShowSuggestions(true);
-        }
-      } catch (error: any) {
-        console.error('Error loading conversation:', error);
-        toast({
-          title: 'Error loading history',
-          description: error.message,
-          variant: 'destructive',
-        });
-        setShowSuggestions(true);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadConversation();
-  }, [chatUserId, toast]);
-
 
   const processAndSendMessage = async (messageText: string) => {
     if (!messageText.trim() || !chatUserId) return;
@@ -110,115 +74,68 @@ const ChatInterface = () => {
     setIsLoading(true);
     if (showSuggestions) setShowSuggestions(false);
 
-    let aiMessageIdForErrorHandling: string | null = null;
-    let currentAiResponseText = '';
-    const aiMessageId = `ai_${Date.now()}`;
-    aiMessageIdForErrorHandling = aiMessageId;
-
-    setMessages((prev) => [...prev, { id: aiMessageId, text: '', sender: 'ai', timestamp: new Date() }]);
-
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch('/api/genkit-chat', { // Updated API endpoint
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          user_id: chatUserId,
-          message: messageText,
+          chatUserId: chatUserId, // Pass chatUserId
+          question: messageText,
          }),
       });
 
+      setIsLoading(false); // Set loading to false after fetch completes
+
       if (!response.ok) {
         let serverErrorMessage = 'Failed to get response from PawPal.';
-        let errorDetails = '';
+        let errorDetails = `Status: ${response.status}`;
         try {
           const errorBody = await response.json();
-          if (errorBody && typeof errorBody.details === 'string') {
-            errorDetails = errorBody.details;
-            serverErrorMessage = `PawPal AI service error: ${errorBody.details}`;
-          } else if (errorBody && typeof errorBody.error === 'string') {
-            errorDetails = errorBody.error;
-            serverErrorMessage = `PawPal AI service error: ${errorBody.error}`;
+          serverErrorMessage = errorBody.error || serverErrorMessage;
+          if (errorBody.details) {
+            errorDetails += ` - Details: ${errorBody.details}`;
           }
         } catch (parseError) {
           console.warn('Failed to parse error response JSON:', parseError);
-          // serverErrorMessage remains generic if parsing fails
+          errorDetails += ` - Response body: ${await response.text()}`;
         }
-        // Log the more detailed error if available, otherwise the generic one
-        console.error(`API request failed with status ${response.status}. Error: ${errorDetails || serverErrorMessage}`);
-        throw new Error(errorDetails || serverErrorMessage); // Throw the more specific error if available
+        console.error(`API request failed. ${errorDetails}`);
+        throw new Error(`${serverErrorMessage} (${errorDetails})`);
       }
       
-      if (!response.body) {
-        throw new Error('API call successful but no response body was received for streaming.');
-      }
+      const data = await response.json();
       
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let sseBuffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        sseBuffer += decoder.decode(value, { stream: true });
-        const lines = sseBuffer.split("\n\n");
-        sseBuffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          
-          const raw = line.slice("data: ".length).trim();
-
-          if (raw === "[DONE]") {
-            console.log("SSE Stream [DONE]");
-            continue; 
-          }
-          // Check if raw starts with [ERROR]
-          if (raw.startsWith("[ERROR]")) {
-            console.error("SSE Stream Error:", raw);
-            const streamedErrorMsg = raw.substring("[ERROR] ".length);
-            // Try to parse if it's JSON, otherwise use as string
-            let finalErrorMsg = "Server indicated an error in the stream.";
-            try {
-              finalErrorMsg = JSON.parse(streamedErrorMsg);
-            } catch (e) {
-              finalErrorMsg = streamedErrorMsg; // Use as is if not JSON
-            }
-            throw new Error(finalErrorMsg);
-          }
-
-          try {
-            const token = JSON.parse(raw);
-            if (typeof token === 'string') {
-                currentAiResponseText += token;
-                setMessages((prev) =>
-                prev.map((msg) =>
-                    msg.id === aiMessageId ? { ...msg, text: currentAiResponseText } : msg
-                )
-                );
-            }
-          } catch (e) {
-              console.error("Error parsing token JSON from SSE:", raw, e);
-          }
-        }
+      if (data.answer) {
+        const aiMessage: Message = {
+          id: `ai_${Date.now()}`,
+          text: data.answer,
+          sender: 'ai',
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, aiMessage]);
+      } else {
+        throw new Error('Received an empty answer from PawPal AI.');
       }
+
     } catch (error) {
-      console.error('Error sending message or processing stream:', error);
+      setIsLoading(false);
+      console.error('Error sending message or processing response:', error);
       const errorMessage = (error instanceof Error && error.message) 
         ? error.message 
         : 'Could not get response from PawPal. Please try again.';
       toast({
         title: 'Chat Error',
-        description: errorMessage,
+        description: errorMessage.substring(0, 300), // Limit length of toast description
         variant: 'destructive',
       });
-      setMessages((prevMessages) => 
-        prevMessages.map(msg => 
-          msg.id === aiMessageIdForErrorHandling ? {...msg, text: `Error: ${errorMessage.substring(0,100)}...`} : msg
-        ).filter(msg => !(msg.id === aiMessageIdForErrorHandling && msg.text ===''))
-      );
-    } finally {
-      setIsLoading(false);
+      // Optionally add an error message to the chat
+      const aiErrorMessage: Message = {
+        id: `ai_error_${Date.now()}`,
+        text: `Sorry, I encountered an error: ${errorMessage.substring(0,100)}...`,
+        sender: 'ai',
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, aiErrorMessage]);
     }
   };
 
@@ -271,6 +188,17 @@ const ChatInterface = () => {
               )}
             </div>
           ))}
+           {isLoading && messages[messages.length-1]?.sender === 'user' && (
+             <div className="flex items-end gap-2 justify-start">
+                <Avatar className="h-8 w-8">
+                    <AvatarImage src="https://placehold.co/40x40.png" alt="PawPal AI" data-ai-hint="robot dog" />
+                    <AvatarFallback><Bot size={18}/></AvatarFallback>
+                </Avatar>
+                <div className="max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap bg-card text-card-foreground border">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                </div>
+             </div>
+           )}
         </div>
       </ScrollArea>
 

@@ -1,108 +1,143 @@
 
-// src/ai/flows/ask-pawpal.ts
 'use server';
-
 /**
- * @fileOverview A Genkit flow for answering pet-related questions specific to San Diego, incorporating context from Yelp, Reddit, and Petfinder.
+ * @fileOverview A Genkit flow for PawPal SD, answering pet-related questions.
  *
- * - askPawPal - A function that handles the question answering process.
- * - AskPawPalInput - The input type for the askPawPal function.
- * - AskPawPalOutput - The return type for the askPawPal function.
+ * - askPawPal - Main function to handle user questions.
+ * - AskPawPalInput - Input type for the flow.
+ * - AskPawPalOutput - Output type for the flow.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { searchReddit, type RedditPost } from '@/services/reddit';
+import { retrieveEmergencyFlowData } from '@/lib/emergency-data-loader'; // Helper to load JSON
 
 const AskPawPalInputSchema = z.object({
-  question: z.string().describe('The pet-related question to answer.'),
-  yelpContext: z.string().optional().describe('Context from Yelp.'),
-  redditContext: z.string().optional().describe('Context from Reddit (DEPRECATED - use searchRedditTool).'),
-  petfinderContext: z.string().optional().describe('Context from Petfinder.'),
+  question: z.string().describe('The user\'s question for PawPal SD.'),
+  chatUserId: z.string().optional().describe('Unique ID for the user/chat session.'),
 });
 export type AskPawPalInput = z.infer<typeof AskPawPalInputSchema>;
 
 const AskPawPalOutputSchema = z.object({
-  answer: z.string().describe('The answer to the pet-related question.'),
+  answer: z.string().describe('PawPal SD\'s answer to the question.'),
+  // For future UI enhancements:
+  // scrollToSection: z.string().optional().describe('Optional ID of a page section to scroll to.'),
+  // structuredData: z.any().optional().describe('Optional structured data for custom rendering.'),
 });
 export type AskPawPalOutput = z.infer<typeof AskPawPalOutputSchema>;
 
-const searchRedditTool = ai.defineTool(
+// Tool to get emergency information
+const getEmergencyInfoTool = ai.defineTool(
   {
-    name: 'searchRedditTool',
-    description: 'Searches Reddit for community advice, experiences, and local discussions relevant to a pet-related question in San Diego. Use for topics like specific vet experiences (especially in Tijuana), local pet issues (e.g., skunk encounters, coyote warnings), or urgent situations where up-to-date community advice might be valuable. Focus on questions that benefit from recent, local, or anecdotal information.',
-    inputSchema: z.object({ 
-      query: z.string().describe('A concise search query derived from the user\'s question, tailored for Reddit. Include "San Diego" or "Tijuana" for location-specific queries if relevant.') 
+    name: 'getEmergencyInfoTool',
+    description: 'Provides information and steps for specific pet emergencies. Use this if the user asks about what to do in an emergency like "my dog got sprayed by a skunk", "found a stray animal", "poisoning", "heatstroke", etc.',
+    inputSchema: z.object({
+      emergencyType: z.string().describe('The specific type of pet emergency (e.g., "skunk spray", "found stray cat", "chocolate ingestion"). Try to match keywords from the user query like "skunk", "stray", "poison".'),
     }),
-    outputSchema: z.object({ 
-      searchResultsSummary: z.string().describe('A summary of the top 3-5 relevant Reddit posts, including titles and brief snippets or key advice points. If no relevant results, state that clearly.') 
+    outputSchema: z.object({
+      adviceSummary: z.string().describe('A brief summary of general or community advice for this emergency.'),
+      staticSteps: z.array(z.object({title: z.string(), details: z.string(), important: z.boolean().optional()})).optional().describe('Specific, step-by-step instructions if available from static knowledge.'),
+      relevantContacts: z.array(z.object({ name: z.string(), number: z.string().optional(), website: z.string().optional() })).optional().describe('Relevant contact information if available.'),
+      immediateActions: z.array(z.string()).optional().describe('Critical immediate actions if available.'),
     }),
   },
   async (input) => {
-    try {
-      const posts: RedditPost[] = await searchReddit(input.query);
-      if (!posts || posts.length === 0) {
-        return { searchResultsSummary: 'No relevant Reddit discussions found for this query.' };
+    const emergencyFlows = await retrieveEmergencyFlowData();
+    let advice = 'No specific community advice loaded for this tool yet.';
+    let steps: any[] = [];
+    let contacts: any[] = [];
+    let immediate: any[] = [];
+
+    if (input.emergencyType.toLowerCase().includes('skunk')) {
+      const skunkFlow = emergencyFlows.find(f => f.id === 'skunk');
+      if (skunkFlow) {
+        steps = skunkFlow.steps;
+        contacts = skunkFlow.relevantContacts || [];
+        immediate = skunkFlow.immediateActions || [];
       }
-      const summary = posts
-        .slice(0, 5) // Take top 5
-        .map(post => `Title: ${post.title}\nSnippet: ${post.selftext ? post.selftext.substring(0, 150) + '...' : 'No additional text.'}\nURL: https://reddit.com${post.permalink}`)
-        .join('\n\n---\n\n');
-      return { searchResultsSummary: summary };
-    } catch (error) {
-      console.error('Error in searchRedditTool:', error);
-      return { searchResultsSummary: 'Could not retrieve information from Reddit at this time.' };
+      // Simulated Reddit/Community advice
+      advice = 'Many pet owners and vets recommend a de-skunking solution made of hydrogen peroxide, baking soda, and dish soap. Always avoid the eyes. It\'s a good idea to have a skunk emergency kit prepared if you live in an area with skunks. Wash your pet outdoors if possible to prevent the smell from spreading inside your home.';
+      return { adviceSummary: advice, staticSteps: steps, relevantContacts: contacts, immediateActions: immediate };
     }
+    
+    // Placeholder for other emergencies
+    return { 
+      adviceSummary: `For ${input.emergencyType}, it's always best to contact your veterinarian or an emergency pet hospital immediately. I can provide general first aid information if you specify the emergency.`,
+      staticSteps: [],
+      relevantContacts: [],
+      immediateActions: [],
+    };
   }
 );
-
-export async function askPawPal(input: AskPawPalInput): Promise<AskPawPalOutput> {
-  return askPawPalFlow(input);
-}
-
-const askPawPalPrompt = ai.definePrompt({
-  name: 'askPawPalPrompt',
-  model: 'googleai/gemini-1.0-pro', 
-  input: {schema: AskPawPalInputSchema},
-  output: {schema: AskPawPalOutputSchema},
-  tools: [searchRedditTool], 
-  prompt: `You are PawPal SD, a friendly and knowledgeable AI assistant for pet owners in San Diego. Provide concise, helpful, and locally relevant information to answer the user's question.
-
-Question: {{{question}}}
-
-{{#if yelpContext}}
-Yelp Context:
-{{{yelpContext}}}
-{{/if}}
-
-{{#if petfinderContext}}
-Petfinder Context:
-{{{petfinderContext}}}
-{{/if}}
-
-If the user's question involves specific local issues (like skunk encounters, coyote warnings), experiences with veterinarians (especially in Tijuana), or seeks community advice for pet-related problems in the San Diego area, consider using the 'searchRedditTool' to gather recent discussions and insights. Extract a focused query for the tool from the user's question.
-
-{{#if tool_outputs.searchRedditTool}}
-Recent Reddit Community Insights:
-{{{tool_outputs.searchRedditTool.searchResultsSummary}}}
-{{/if}}
-
-Based on all available information, including any Yelp, Petfinder, or Reddit context, provide a comprehensive answer to the user's question. If Reddit information was fetched and is relevant, incorporate it into your answer.
-`,
-});
 
 const askPawPalFlow = ai.defineFlow(
   {
     name: 'askPawPalFlow',
     inputSchema: AskPawPalInputSchema,
     outputSchema: AskPawPalOutputSchema,
+    // Ensure tools are available to the flow
+    tools: [getEmergencyInfoTool],
   },
   async (input) => {
-    const { question, yelpContext, petfinderContext } = input;
-    const flowInput = { question, yelpContext, petfinderContext };
+    const model = 'googleai/gemini-1.5-flash-latest';
+    
+    const prompt = `You are PawPal SD, a friendly and expert AI assistant for pet owners in San Diego.
+User's Question: "${input.question}"
 
-    const {output} = await askPawPalPrompt(flowInput);
-    return output!;
+Your primary goal is to provide helpful, concise, and actionable advice.
+
+If the question is about a pet emergency (e.g., "skunk", "poison", "choking", "found stray"):
+1. Use the 'getEmergencyInfoTool' to gather specific advice and steps.
+2. Present the immediate actions first, if any.
+3. Then, clearly list the step-by-step instructions provided by the tool.
+4. Include the advice summary from the tool, perhaps framing it as "Community tips suggest..." or "General advice includes...".
+5. List any relevant contacts provided by the tool.
+6. ALWAYS add a disclaimer: "This information is for guidance only. Always consult a veterinarian for professional medical advice, especially in an emergency."
+
+If the question is NOT an emergency I can currently handle with my tools:
+- Provide a polite and helpful response. For now, you can say: "I'm PawPal SD, and I'm best at helping with common pet emergencies right now, like what to do if your dog gets sprayed by a skunk. For other questions, I recommend checking trusted veterinary websites or local San Diego pet resources. How can I help with an emergency today?"
+- Do not attempt to answer complex questions outside of emergencies without using a specific tool for that topic (we will add more tools later).
+
+Keep your answers clear, empathetic, and focused on the user's needs.
+`;
+
+    const llmResponse = await ai.generate({
+      model: model,
+      prompt: prompt,
+      tools: [getEmergencyInfoTool], // Make tool available to this specific generation call
+      output: {
+        format: 'json', // Request JSON if you want to parse structured output, otherwise 'text'
+        schema: AskPawPalOutputSchema, // Optional: guide the LLM to produce output matching this schema
+      },
+       // Optional: Add safety settings if needed, though defaults are usually fine for this type of content
+       config: {
+        safetySettings: [
+          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' }, // Allow some general advice that might be "dangerous" if misinterpreted, but block high harm.
+        ],
+      },
+    });
+
+    // If output format is JSON and schema is provided, llmResponse.output should be structured
+    const output = llmResponse.output();
+
+    if (output) {
+      return output;
+    }
+
+    // Fallback if structured output fails or if text format was used
+    let answerText = llmResponse.text();
+    
+    // If tools were called, their output is available in llmResponse.toolRequests and llmResponse.toolResponses
+    // The main prompt already instructs the LLM to synthesize this, so 'answerText' should ideally contain the synthesized result.
+    // For more complex synthesis, you might need to manually combine llmResponse.text() with tool_outputs if the LLM doesn't do it well.
+
+    return { answer: answerText || "I'm sorry, I couldn't generate a response for that. Please try rephrasing your question." };
   }
 );
 
+export async function askPawPal(input: AskPawPalInput): Promise<AskPawPalOutput> {
+  return askPawPalFlow(input);
+}

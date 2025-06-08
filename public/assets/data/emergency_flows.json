@@ -1,111 +1,101 @@
+
 [
   {
-    "id": "skunk_spray",
-    "name": "Dog Sprayed by Skunk",
-    "description": "Steps to take if your dog has been sprayed by a skunk.",
+    "id": "skunk",
+    "name": "Skunk Spray",
+    "icon": "SprayCan",
+    "description": "What to do if your pet gets sprayed by a skunk.",
     "immediateActions": [
-      "Keep your dog outside to prevent the smell from spreading indoors.",
-      "Check your dog's eyes for redness or irritation. If affected, rinse gently with cool water or pet-safe eyewash."
+      "Keep your pet outdoors to prevent the smell from spreading inside.",
+      "Check your pet's eyes for redness or irritation. If affected, rinse gently with cool water or pet-safe eyewash."
     ],
     "steps": [
       {
-        "title": "Gather Supplies",
-        "details": "You'll need: Rubber gloves, old towels, skunk shampoo (or a de-skunking solution: 1 quart of 3% hydrogen peroxide solution, 1/4 cup baking soda, 1 teaspoon liquid dish soap). Mix solution right before use, do not store.",
+        "title": "Prepare De-Skunking Solution",
+        "details": "Mix: 1 quart of 3% hydrogen peroxide solution (check expiry), ¼ cup baking soda, 1-2 teaspoons of mild liquid dish soap. Mix fresh for each use; do not store.",
         "important": true
       },
       {
-        "title": "Apply Solution (Avoid Eyes)",
-        "details": "Wearing gloves, apply the de-skunking solution to your dog's dry fur, avoiding the eyes and mouth. Lather well and let it sit for 5-10 minutes. Be careful, peroxide can bleach fur."
+        "title": "Apply Solution",
+        "details": "Wearing rubber gloves, lather your pet with the solution, avoiding eyes and mouth. Work it deep into the fur. Let it sit for about 5 minutes. Do NOT leave unattended.",
+        "important": true
       },
       {
         "title": "Rinse Thoroughly",
-        "details": "Rinse your dog completely with lukewarm water. Ensure all solution is removed."
+        "details": "Rinse your pet completely with lukewarm water. Ensure all solution is removed, as peroxide can bleach fur and irritate skin if left too long."
       },
       {
-        "title": "Wash with Pet Shampoo",
+        "title": "Shampoo",
         "details": "Follow up with a regular pet shampoo to remove any residue."
       },
       {
-        "title": "Towel Dry",
-        "details": "Dry your dog thoroughly with old towels."
+        "title": "Towel Dry and Keep Warm",
+        "details": "Dry your pet thoroughly with towels and keep them in a warm place."
       },
       {
-        "title": "Monitor Your Dog",
-        "details": "Watch for any signs of illness, irritation, or excessive drooling. Contact your vet if concerned."
+        "title": "Monitor Your Pet",
+        "details": "Watch for any signs of illness, vomiting, or excessive irritation. Skunk spray can sometimes cause anemia in dogs. Contact your vet if concerned."
       }
     ],
     "relevantContacts": [
-      { "name": "Your Veterinarian", "number": "(Your Vet's Number)", "website": "(Your Vet's Website)"},
-      { "name": "ASPCA Animal Poison Control Center", "number": "(888) 426-4435" }
+      {
+        "name": "Your Veterinarian",
+        "number": "Lookup your vet's number",
+        "website": ""
+      },
+      {
+        "name": "Pet Poison Helpline",
+        "number": "855-764-7661",
+        "website": "https://www.petpoisonhelpline.com"
+      }
     ]
   },
   {
     "id": "found_stray",
-    "name": "Found a Stray Animal",
-    "description": "What to do if you find a lost or stray pet.",
+    "name": "Found a Stray Pet",
+    "icon": "PawPrint",
+    "description": "Steps to take if you find a lost dog or cat.",
     "immediateActions": [
-      "Approach cautiously. The animal may be scared or injured.",
-      "If the animal appears aggressive or you feel unsafe, do not approach. Call animal control.",
-      "Check for a collar and ID tags."
+      "Approach cautiously and speak calmly. Offer water if the animal seems distressed or thirsty.",
+      "Check for any visible identification tags (collar, name tag, rabies tag)."
     ],
     "steps": [
       {
-        "title": "Provide Safety (If Possible)",
-        "details": "If safe to do so, confine the animal in a secure area (e.g., fenced yard, garage, crate) with fresh water. Keep separate from your own pets."
+        "title": "Ensure Safety",
+        "details": "Keep the animal contained in a safe place (e.g., fenced yard, carrier, spare room) away from your own pets initially."
       },
       {
         "title": "Check for Microchip",
-        "details": "Take the animal to a local vet clinic or animal shelter to scan for a microchip. This is usually a free service."
+        "details": "Take the pet to a local vet clinic or animal shelter to have it scanned for a microchip. This is often a free service."
       },
       {
         "title": "Notify Local Shelters & Animal Control",
-        "details": "Report the found animal to San Diego Humane Society, County Animal Services, and other local shelters. Provide a description, location found, and your contact info."
+        "details": "Contact San Diego Humane Society, County Animal Services, and shelters in your immediate area. Provide a description of the animal, where it was found, and your contact info."
       },
       {
-        "title": "Use Social Media & Online Resources",
-        "details": "Post on local lost & found pet groups (e.g., Facebook, Nextdoor, PawBoost, Petco Love Lost). Include a photo, location, and date found."
+        "title": "Post Online",
+        "details": "Use social media (Facebook lost & found pet groups for San Diego, Nextdoor, PawBoost, Petco Love Lost) to post a photo and description of the found pet."
       },
       {
         "title": "Put Up Flyers",
-        "details": "Consider putting up 'Found Pet' flyers in the neighborhood where the animal was found."
+        "details": "Place 'Found Pet' flyers in the neighborhood where the animal was found."
+      },
+      {
+        "title": "Legal Holding Period",
+        "details": "Be aware of local regulations regarding stray animals. There's usually a holding period before a found pet can be considered for rehoming."
       }
     ],
     "relevantContacts": [
-      { "name": "San Diego Humane Society", "website": "https://www.sdhumane.org/services/lost-and-found/" },
-      { "name": "San Diego County Animal Services", "website": "https://www.sddac.com/content/sdc/das/lost-found.html" }
-    ]
-  },
-  {
-    "id": "rattlesnake_bite",
-    "name": "Rattlesnake Bite on Pet",
-    "description": "Critical steps if your pet is bitten by a rattlesnake.",
-    "immediateActions": [
-      "Stay calm, but act quickly. Keep your pet as still and quiet as possible.",
-      "Identify the snake if possible, but DO NOT attempt to catch or kill it.",
-      "Immediately seek veterinary attention. This is a life-threatening emergency."
-    ],
-    "steps": [
       {
-        "title": "Go to a Vet IMMEDIATELY",
-        "details": "This is the most critical step. Call ahead to the nearest emergency vet to let them know you are coming. Antivenom is often needed.",
-        "important": true
+        "name": "San Diego Humane Society",
+        "number": "(619) 299-7012",
+        "website": "https://www.sdhumane.org"
       },
       {
-        "title": "Keep Bite Area Below Heart Level",
-        "details": "If possible, try to keep the bitten area lower than the level of the pet's heart."
-      },
-      {
-        "title": "DO NOT Do These Things",
-        "details": "DO NOT apply a tourniquet. DO NOT cut the wound. DO NOT try to suck out venom. DO NOT apply ice or heat. DO NOT give any medications unless directed by a vet."
-      },
-      {
-        "title": "Note Time of Bite",
-        "details": "Try to remember the approximate time the bite occurred."
+        "name": "San Diego County Animal Services",
+        "number": "(619) 767-2675",
+        "website": "https://www.sddac.com"
       }
-    ],
-    "relevantContacts": [
-      { "name": "Pet Poison Helpline", "number": "(855) 764-7661" },
-      { "name": "List of 24-Hour Emergency Vets in San Diego", "website": "(Link to Yelp search or curated list)"}
     ]
   }
 ]
