@@ -91,36 +91,35 @@ const ChatInterface = () => {
     }
   }, [messages]);
 
-  const fetchSimulatedRedditContext = async (query: string): Promise<{ redditContext: string | null; source: string | null }> => {
+  const fetchRedditContextDirectAPI = async (query: string): Promise<{ redditContext: string | null; source: string | null }> => {
     setIsFetchingContext(true);
     const contextMsgId = `context_${Date.now()}`;
-    setMessages((prev) => [...prev, {id: contextMsgId, text: "Thinking about common Reddit discussions...", sender: 'context-info', timestamp: new Date()}]);
+    setMessages((prev) => [...prev, {id: contextMsgId, text: "Checking for relevant Reddit discussions...", sender: 'context-info', timestamp: new Date()}]);
 
     try {
       const response = await fetch(`/api/reddit-context?query=${encodeURIComponent(query)}`);
-      // Always remove the "Thinking..." message regardless of API success/failure for this approach
       setMessages(prev => prev.filter(m => m.id !== contextMsgId)); 
 
       if (!response.ok) {
-        console.warn('[ChatInterface] Failed to fetch simulated Reddit context, API responded with non-OK status:', response.status);
+        console.warn('[ChatInterface] Failed to fetch direct Reddit context, API responded with non-OK status:', response.status);
         const errorData = await response.json().catch(() => null);
-        const errorMessage = errorData?.redditContext || "Could not fetch simulated Reddit context at this time.";
-        // Display a less intrusive error/info message if context fetch fails
+        const errorMessage = errorData?.redditContext || "Could not fetch Reddit context at this time.";
         setMessages((prev) => [...prev, {id: `context_error_${Date.now()}`, text: `ℹ️ ${errorMessage}`, sender: 'context-info', timestamp: new Date()}]);
         return { redditContext: null, source: null };
       }
       const data: { redditContext: string; source: string } = await response.json();
-      console.log('[ChatInterface] Data from /api/reddit-context (simulated search):', data);
+      console.log('[ChatInterface] Data from /api/reddit-context (direct API):', data);
       return { redditContext: data.redditContext, source: data.source };
     } catch (error) {
-      console.error('[ChatInterface] Error fetching simulated Reddit context:', error);
+      console.error('[ChatInterface] Error fetching direct Reddit context:', error);
       setMessages(prev => prev.filter(m => m.id !== contextMsgId)); 
-      setMessages((prev) => [...prev, {id: `context_error_${Date.now()}`, text: `ℹ️ Error fetching simulated Reddit context. Proceeding without it.`, sender: 'context-info', timestamp: new Date()}]);
+      setMessages((prev) => [...prev, {id: `context_error_${Date.now()}`, text: `ℹ️ Error fetching Reddit context. Proceeding without it.`, sender: 'context-info', timestamp: new Date()}]);
       return { redditContext: null, source: null };
     } finally {
       setIsFetchingContext(false);
     }
   };
+
 
   const processAndSendMessage = async (messageText: string) => {
     if (!messageText.trim() || !chatUserId) return;
@@ -142,31 +141,44 @@ const ChatInterface = () => {
     let actualRedditContextWasAddedToPrompt = false; 
     let contextSourceUsed: string | null = null;
 
-    // For this new approach, we always try to get simulated Reddit context
-    const { redditContext, source } = await fetchSimulatedRedditContext(messageText); 
-    console.log(`[ChatInterface] Fetched Simulated Reddit Context for augmentation: ${redditContext} Source: ${source}`);
+    // Fetch context using the direct Reddit API approach
+    const { redditContext, source } = await fetchRedditContextDirectAPI(messageText); 
+    console.log(`[ChatInterface] Fetched Direct Reddit Context for augmentation: ${redditContext} Source: ${source}`);
 
     const noResultsOrErrorMessages = [
-      "Could not generate a simulated Reddit summary",
-      "An error occurred while trying to generate simulated Reddit context",
-      "Could not fetch simulated Reddit context",
-      // Add any other "no useful context" messages from your Genkit flow if they differ
+      "No specific discussions found", // Covers "No specific discussions found on r/sandiego..." and "No specific discussions found on general Reddit..."
+      "Could not extract a concise summary",
+      "Could not find specific community discussions", // Generic
+      "Could not fetch Reddit context",
+      "Error fetching Reddit context",
+      "Error fetching context from r/sandiego",
+      "Error fetching general Reddit context"
     ];
 
     const isContextValidAndNotEmpty = redditContext && 
-                                 source && 
-                                 (source === 'simulated_reddit_search') && // Check for the specific source
+                                 source && source !== 'none' &&
                                  !noResultsOrErrorMessages.some(msg => redditContext.includes(msg));
 
     if (isContextValidAndNotEmpty) {
-      const cleanedRedditContext = redditContext.replace(/\n{2,}/g, '\n').trim(); // Clean up newlines
-      augmentedMessage = `${messageText}\n\nConsider this based on simulated Reddit web search results for your query:\n${cleanedRedditContext}`;
-      setMessages((prev) => [...prev, {id: `context_added_${Date.now()}`, text: `ℹ️ I've considered what's commonly discussed on Reddit for this topic.`, sender: 'context-info', timestamp: new Date()}]);
+      const cleanedRedditContext = redditContext.replace(/\n{2,}/g, '\n').trim(); 
+      let contextHeader = "Consider this from recent community discussions:\n"; // Default header
+      if (source === 'r/sandiego') {
+        contextHeader = "Consider this from recent community discussions on r/sandiego:\n";
+        setMessages((prev) => [...prev, {id: `context_added_${Date.now()}`, text: `ℹ️ I've included some recent insights from r/sandiego in my considerations.`, sender: 'context-info', timestamp: new Date()}]);
+      } else if (source === 'general_reddit') {
+        contextHeader = "Consider this from recent community discussions on general Reddit community discussions:\n";
+        setMessages((prev) => [...prev, {id: `context_added_${Date.now()}`, text: `ℹ️ I've included some recent insights from general Reddit community discussions in my considerations.`, sender: 'context-info', timestamp: new Date()}]);
+      }
+      
+      augmentedMessage = `${messageText}\n\n${contextHeader}${cleanedRedditContext}`;
       actualRedditContextWasAddedToPrompt = true; 
-      contextSourceUsed = source; // Store the source
-      console.log(`[ChatInterface] Simulated Reddit context from '${source}' was added to the prompt. actualRedditContextWasAddedToPrompt = true`);
+      contextSourceUsed = source; 
+      console.log(`[ChatInterface] Reddit context from ${source} was added to the prompt. actualRedditContextWasAddedToPrompt = true`);
     } else {
-      console.log(`[ChatInterface] Simulated Reddit context was not suitable to add to prompt. Source: ${source}, Context: ${redditContext}`);
+      console.log(`[ChatInterface] Reddit context was not suitable to add to prompt, or was null/empty. actualRedditContextWasAddedToPrompt = false. Context received: ${redditContext}`);
+       if (source && source !== 'none' && redditContext) { // Context was fetched but deemed not suitable
+           setMessages((prev) => [...prev, {id: `context_info_${Date.now()}`, text: `ℹ️ ${redditContext}`, sender: 'context-info', timestamp: new Date()}]);
+       }
     }
     
     console.log('[ChatInterface] Sending to /api/chat. Augmented message:', JSON.stringify(augmentedMessage));
@@ -257,7 +269,7 @@ const ChatInterface = () => {
 
       let finalAiText = aiPartialResponse;
       if (actualRedditContextWasAddedToPrompt) {
-        const sourceText = contextSourceUsed === 'simulated_reddit_search' ? "simulated Reddit search" : "Reddit"; // Adjust if more sources are added
+        const sourceText = contextSourceUsed === 'r/sandiego' ? "r/sandiego" : "Reddit";
         finalAiText += ` (Derived from ${sourceText}!)`;
         console.log(`[ChatInterface] Appending "(Derived from ${sourceText}!)" to AI response.`);
       } else {
@@ -360,7 +372,7 @@ const ChatInterface = () => {
               )}
             </div>
           ))}
-           { (isLoading || isFetchingContext) && messages[messages.length-1]?.sender === 'user' && !messages.some(m => m.sender === 'context-info' && m.text.includes('Thinking about common Reddit discussions...')) && (
+           { (isLoading || isFetchingContext) && messages[messages.length-1]?.sender === 'user' && !messages.some(m => m.sender === 'context-info' && m.text.includes('Checking for relevant Reddit discussions...')) && (
              <div className="flex items-end gap-2 justify-start">
                 <Avatar className="h-8 w-8">
                     <AvatarImage src="https://placehold.co/40x40.png" alt="PawPal AI" data-ai-hint="robot dog" />
@@ -416,3 +428,4 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
+
