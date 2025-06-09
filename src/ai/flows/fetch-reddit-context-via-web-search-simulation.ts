@@ -50,28 +50,31 @@ const fetchRedditContextFlow = ai.defineFlow(
     outputSchema: FetchRedditContextOutputSchema,
   },
   async (input: FetchRedditContextInput): Promise<FetchRedditContextOutput> => {
-    console.log('[Genkit Flow - Web Search Sim] Received query:', input.userQuery);
+    console.log('[Genkit Flow - Web Search Sim] Initiated for query:', input.userQuery);
     try {
+      console.log('[Genkit Flow - Web Search Sim] Calling simulatedRedditSearchPrompt with input:', JSON.stringify(input));
       const {output} = await simulatedRedditSearchPrompt(input);
       
+      console.log('[Genkit Flow - Web Search Sim] Raw output from LLM prompt:', JSON.stringify(output));
+
       if (output?.redditSummary) {
-        console.log('[Genkit Flow - Web Search Sim] Generated summary:', output.redditSummary);
+        console.log('[Genkit Flow - Web Search Sim] Successfully generated summary:', output.redditSummary);
         return {
           summary: output.redditSummary,
           source: 'simulated_reddit_search',
         };
       } else {
-        console.warn('[Genkit Flow - Web Search Sim] LLM did not return a summary in the expected format.');
+        console.warn('[Genkit Flow - Web Search Sim] LLM did not return a summary in the expected format (output.redditSummary is missing or falsy). Full output:', JSON.stringify(output));
         return {
-          summary: 'Could not generate a simulated Reddit summary for this topic.',
-          source: 'simulated_reddit_search_failed',
+          summary: 'Simulated Reddit: LLM did not return summary in expected format.',
+          source: 'simulated_reddit_search_failed_format',
         };
       }
-    } catch (error) {
-      console.error('[Genkit Flow - Web Search Sim] Error during flow execution:', error);
+    } catch (error: any) {
+      console.error('[Genkit Flow - Web Search Sim] Error during flow execution:', error.message, error.stack);
       return {
-        summary: 'An error occurred while trying to generate simulated Reddit context.',
-        source: 'simulated_reddit_search_error',
+        summary: `Simulated Reddit: Error during Genkit flow - ${error.message.substring(0, 100)}`,
+        source: 'simulated_reddit_search_error_execution',
       };
     }
   }
@@ -82,3 +85,4 @@ export async function fetchRedditContextViaWebSearchSimulation(
 ): Promise<FetchRedditContextOutput> {
   return fetchRedditContextFlow(input);
 }
+
