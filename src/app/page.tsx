@@ -19,16 +19,13 @@ import { cn } from '@/lib/utils';
 export default function HomePage() {
   const [isChatOpen, setIsChatOpen] = useState(true);
 
-  // stickyChatTopOffset aligns with the top padding of the main content area (py-8 from layout.tsx)
-  const stickyChatTopOffset = "2rem"; // 32px
+  // stickyChatTopOffset aligns with the top padding of the main content area (py-8 from layout.tsx if header isn't considered)
+  const stickyChatTopOffset = "2rem"; // 32px. This is relative to its containing block.
 
   // Max height for sticky chat column:
-  // ViewportHeight - EffectiveTopOffsetOfStickyColumn - PageBottomPadding - FooterHeight
-  // EffectiveTopOffset = HeaderHeight (approx 66px) + PageContainerTopPadding (32px) + stickyChatTopOffset (32px) = 130px
-  // PageBottomPadding = 32px (from layout.tsx py-8)
-  // FooterHeight = approx 60px
-  // MaxHeight = 100vh - (130px + 32px + 60px) = 100vh - 222px
-  const chatMaxHeight = `calc(100vh - 222px)`;
+  // ViewportHeight - HeaderHeight - FooterHeight - PageBottomPadding (of main container in layout)
+  // Approximate values: Header ~68px, Footer ~60px, PageBottomPadding ~32px
+  const chatMaxHeight = `calc(100vh - (68px + 60px + 32px))`; // Adjusted calculation
 
 
   return (
@@ -133,7 +130,7 @@ export default function HomePage() {
       >
         {isChatOpen ? (
           <Card className="w-full flex-1 flex flex-col shadow-xl border border-border rounded-lg overflow-hidden min-h-0">
-            <CardHeader className="text-center border-b relative py-3 shrink-0">
+            <CardHeader className="text-center border-b relative py-3 shrink-0"> {/* Added shrink-0 */}
               <div className="flex items-center justify-center gap-2">
                 <MessageCircle className="w-5 h-5 text-primary" />
                 <CardTitle className="text-md font-headline text-primary">Ask PawPal AI</CardTitle>
@@ -148,7 +145,9 @@ export default function HomePage() {
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </CardHeader>
-            <ChatInterface />
+            <CardContent className="flex-1 flex flex-col min-h-0 p-0"> {/* Added p-0 */}
+              <ChatInterface />
+            </CardContent>
           </Card>
         ) : (
           <div className="w-full flex md:justify-start justify-center items-start pt-0">
