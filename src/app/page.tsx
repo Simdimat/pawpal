@@ -19,14 +19,16 @@ import { cn } from '@/lib/utils';
 export default function HomePage() {
   const [isChatOpen, setIsChatOpen] = useState(true);
 
-  // stickyChatTopOffset aligns with the top padding of the main content area (py-8 from layout.tsx if header isn't considered)
-  const stickyChatTopOffset = "2rem"; // 32px. This is relative to its containing block.
+  // This offset positions the sticky chat column 2rem below the top of its containing block
+  // (the main content area which already has its own padding from layout.tsx).
+  const stickyChatTopOffset = "2rem"; // 32px
 
-  // Max height for sticky chat column:
-  // ViewportHeight - HeaderHeight - FooterHeight - PageBottomPadding (of main container in layout)
-  // Approximate values: Header ~68px, Footer ~60px, PageBottomPadding ~32px
-  const chatMaxHeight = `calc(100vh - (68px + 60px + 32px))`; // Adjusted calculation
-
+  // Corrected Max height for sticky chat column:
+  // ViewportHeight - EffectiveTopOffsetFromViewport - SpaceConsumedByFooterAndBottomPadding
+  // EffectiveTopOffsetFromViewport = HeaderHeight (68px) + LayoutMainDivPaddingTop (32px) + stickyChatTopOffset (32px) = 132px
+  // SpaceConsumedByFooterAndBottomPadding = FooterHeight (60px) + LayoutMainDivPaddingBottom (32px) = 92px
+  // chatMaxHeight = 100vh - 132px - 92px = 100vh - 224px
+  const chatMaxHeight = `calc(100vh - 224px)`;
 
   return (
     <div className="flex flex-col md:flex-row w-full gap-x-6">
@@ -46,7 +48,7 @@ export default function HomePage() {
           </section>
 
           <section className="w-full">
-            <div className="container px-0"> {/* Removed horizontal padding for this specific layout to align with sections below */}
+            <div className="container px-0">
               <h2 className="text-3xl font-headline font-bold tracking-tight text-center text-foreground mb-12">
                 Explore PawPal SD Features
               </h2>
@@ -130,7 +132,7 @@ export default function HomePage() {
       >
         {isChatOpen ? (
           <Card className="w-full flex-1 flex flex-col shadow-xl border border-border rounded-lg overflow-hidden min-h-0">
-            <CardHeader className="text-center border-b relative py-3 shrink-0"> {/* Added shrink-0 */}
+            <CardHeader className="text-center border-b relative py-3 shrink-0">
               <div className="flex items-center justify-center gap-2">
                 <MessageCircle className="w-5 h-5 text-primary" />
                 <CardTitle className="text-md font-headline text-primary">Ask PawPal AI</CardTitle>
@@ -145,7 +147,7 @@ export default function HomePage() {
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col min-h-0 p-0"> {/* Added p-0 */}
+            <CardContent className="flex-1 flex flex-col min-h-0 p-0">
               <ChatInterface />
             </CardContent>
           </Card>
