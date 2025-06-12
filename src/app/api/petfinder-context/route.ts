@@ -2,31 +2,61 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { fetchOrganizations, type PetfinderOrganization } from '@/services/petfinder';
 
-// Helper function to extract a simple location from the query, defaulting to San Diego
-// This is very basic and might need improvement for more complex queries.
+// Updated function to extract location, prioritizing specific San Diego areas
 function extractLocationFromQuery(query: string): string {
-  const sanDiegoVariants = ['san diego', 'sd'];
-  const tijuanaVariants = ['tijuana', 'tj'];
-
   const qLower = query.toLowerCase();
+  
+  // Priority for zip codes
+  const zipCodeMatch = qLower.match(/\b\d{5}\b/);
+  if (zipCodeMatch?.[0]) {
+    console.log(`[API /petfinder-context] Extracted zip code: ${zipCodeMatch[0]} from query: "${query}"`);
+    return zipCodeMatch[0];
+  }
 
-  if (tijuanaVariants.some(variant => qLower.includes(variant))) {
-    return 'Tijuana, BC, Mexico';
+  const neighborhoods: Record<string, string[]> = {
+    'Clairemont, San Diego, CA': ['clairemont'],
+    'La Jolla, San Diego, CA': ['la jolla', 'lajolla'],
+    'North Park, San Diego, CA': ['north park'],
+    'Downtown San Diego, CA': ['downtown', 'gaslamp'],
+    'Pacific Beach, San Diego, CA': ['pacific beach', 'pb'],
+    'Ocean Beach, San Diego, CA': ['ocean beach', 'ob'],
+    'Hillcrest, San Diego, CA': ['hillcrest'],
+    'Point Loma, San Diego, CA': ['point loma'],
+    'Carmel Valley, San Diego, CA': ['carmel valley'],
+    'Miramar, San Diego, CA': ['miramar'],
+    'Mira Mesa, San Diego, CA': ['mira mesa'],
+    'University City, San Diego, CA': ['university city', 'utc'],
+    // Broader areas (less specific but better than just "San Diego, CA" if matched)
+    'Chula Vista, CA': ['chula vista'],
+    'National City, CA': ['national city'],
+    'El Cajon, CA': ['el cajon'],
+    'La Mesa, CA': ['la mesa'],
+    'Santee, CA': ['santee'],
+    'Tijuana, BC, Mexico': ['tijuana', 'tj'],
+    // Default if no specific part is found
+    'San Diego, CA': ['san diego', 'sd'], 
+  };
+
+  for (const [fullLocation, keywords] of Object.entries(neighborhoods)) {
+    if (keywords.some(kw => qLower.includes(kw))) {
+      console.log(`[API /petfinder-context] Extracted location: "${fullLocation}" from query: "${query}" for Petfinder.`);
+      return fullLocation;
+    }
   }
-  // Default to San Diego if no other specific location is mentioned or if SD is mentioned
-  if (sanDiegoVariants.some(variant => qLower.includes(variant)) || !tijuanaVariants.some(variant => qLower.includes(variant))) {
-    return 'San Diego, CA';
-  }
-  return 'San Diego, CA'; // Fallback default
+  
+  // Fallback if absolutely no match
+  const defaultLocation = 'San Diego, CA';
+  console.log(`[API /petfinder-context] No specific location extracted from query: "${query}". Defaulting to "${defaultLocation}" for Petfinder.`);
+  return defaultLocation;
 }
 
-function summarizePetfinderResults(organizations: PetfinderOrganization[], query: string): string {
+function summarizePetfinderResults(organizations: PetfinderOrganization[], query: string, location: string): string {
   if (!organizations || organizations.length === 0) {
-    return `No relevant Petfinder shelter or rescue listings found matching your query "${query}".`;
+    return `No relevant Petfinder shelter or rescue listings found for organizations in "${location}" related to your query "${query}".`;
   }
 
-  let summary = "According to Petfinder, here are some relevant organizations:\n";
-  const limit = Math.min(organizations.length, 3); // Show up to 3
+  let summary = `According to Petfinder, here are some relevant organizations in/near "${location}":\n`;
+  const limit = Math.min(organizations.length, 3); 
 
   for (let i = 0; i < limit; i++) {
     const org = organizations[i];
@@ -58,22 +88,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Query parameter is required for Petfinder context.' }, { status: 400 });
     }
 
-    const location = extractLocationFromQuery(query);
-    // For Petfinder, the 'query' itself isn't used to filter organizations by name directly in fetchOrganizations.
-    // fetchOrganizations primarily uses location. We can list general orgs or filter later if Petfinder API allows.
-    // For now, we'll fetch organizations for the location and the LLM can use the user's query to pick relevant info.
+    const locationForPetfinder = extractLocationFromQuery(query);
     
-    console.log(`[API /petfinder-context] Fetching organizations for location: "${location}" based on query: "${query}"`);
+    console.log(`[API /petfinder-context] Fetching Petfinder organizations for effective location: "${locationForPetfinder}" based on original query: "${query}"`);
 
-    const organizations = await fetchOrganizations(location, 10); // Fetch up to 10, summarize fewer
+    const organizations = await fetchOrganizations(locationForPetfinder, 10); 
 
     if (!organizations || organizations.length === 0) {
-      console.log(`[API /petfinder-context] No organizations found by Petfinder for location: "${location}".`);
-      return NextResponse.json({ context: `No Petfinder organizations found for "${location}" related to your query.`, source: 'none' });
+      console.log(`[API /petfinder-context] No organizations found by Petfinder for effective location: "${locationForPetfinder}".`);
+      return NextResponse.json({ context: `No Petfinder organizations found for "${locationForPetfinder}" related to your query.`, source: 'none' });
     }
     
-    const contextSummary = summarizePetfinderResults(organizations, query);
-    console.log(`[API /petfinder-context] Summarized Petfinder context for query "${query}": ${contextSummary.substring(0,100)}...`);
+    const contextSummary = summarizePetfinderResults(organizations, query, locationForPetfinder);
+    console.log(`[API /petfinder-context] Summarized Petfinder context for query "${query}" (location: "${locationForPetfinder}"): ${contextSummary.substring(0,100)}...`);
 
     return NextResponse.json({ context: contextSummary, source: 'petfinder' });
 
@@ -82,3 +109,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ context: `Error fetching Petfinder context: ${error.message || 'Unknown error'}.`, source: 'none' }, { status: 500 });
   }
 }
+
+    
