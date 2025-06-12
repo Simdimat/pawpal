@@ -114,7 +114,6 @@ const ChatInterface = () => {
   };
   
   const fetchContextAPI = async (apiEndpoint: string, query: string, contextName: string): Promise<{ context: string | null; source: string | null }> => {
-    setIsFetchingContext(true);
     const contextMsgId = `context_${contextName}_${Date.now()}`;
     setMessages((prev) => [...prev, {id: contextMsgId, text: `Checking for relevant ${contextName} data...`, sender: 'context-info', timestamp: new Date()}]);
 
@@ -131,14 +130,12 @@ const ChatInterface = () => {
       }
       const data: { context: string; source: string } = await response.json();
       console.log(`[ChatInterface] Data from ${apiEndpoint} (${contextName}):`, data);
-      return data; // data should include { context: "...", source: "..." }
+      return data;
     } catch (error) {
       console.error(`[ChatInterface] Error fetching ${contextName} context:`, error);
       setMessages(prev => prev.filter(m => m.id !== contextMsgId)); 
       setMessages((prev) => [...prev, {id: `context_error_${contextName}_${Date.now()}`, text: `ℹ️ Error fetching ${contextName} context. Proceeding without it.`, sender: 'context-info', timestamp: new Date()}]);
       return { context: null, source: null };
-    } finally {
-      // SetIsFetchingContext will be handled by the calling function after all attempts
     }
   };
 
@@ -163,41 +160,38 @@ const ChatInterface = () => {
     let contextForPrompt: string | null = null;
     let contextSourceUsed: string | null = null;
 
-    setIsFetchingContext(true); // Set loading true at the start of context fetching
+    setIsFetchingContext(true); 
 
-    // 1. Try Reddit Context
     const redditData = await fetchContextAPI('/api/reddit-context', messageText, 'Reddit');
     if (isContextValidAndNotEmpty(redditData.context, redditData.source)) {
       contextForPrompt = redditData.context;
-      contextSourceUsed = redditData.source; // Will be 'r/sandiego' or 'general_reddit'
+      contextSourceUsed = redditData.source;
       console.log(`[ChatInterface] Using Reddit context from ${contextSourceUsed}.`);
     }
 
-    // 2. If no valid Reddit context, try Yelp Context
     if (!contextForPrompt) {
       const yelpData = await fetchContextAPI('/api/yelp-context', messageText, 'Yelp');
       if (isContextValidAndNotEmpty(yelpData.context, yelpData.source)) {
         contextForPrompt = yelpData.context;
-        contextSourceUsed = yelpData.source; // Will be 'yelp'
+        contextSourceUsed = yelpData.source;
         console.log(`[ChatInterface] Using Yelp context.`);
       }
     }
 
-    // 3. If no valid Reddit or Yelp context, try Petfinder Context
     if (!contextForPrompt) {
       const petfinderData = await fetchContextAPI('/api/petfinder-context', messageText, 'Petfinder');
       if (isContextValidAndNotEmpty(petfinderData.context, petfinderData.source)) {
         contextForPrompt = petfinderData.context;
-        contextSourceUsed = petfinderData.source; // Will be 'petfinder'
+        contextSourceUsed = petfinderData.source; 
         console.log(`[ChatInterface] Using Petfinder context.`);
       }
     }
     
-    setIsFetchingContext(false); // Set loading false after all context fetching attempts
+    setIsFetchingContext(false); 
 
     if (contextForPrompt && contextSourceUsed) {
       const cleanedContext = contextForPrompt.replace(/\n{2,}/g, '\n').trim();
-      let contextHeader = "Consider this from external data:\n"; // Default header
+      let contextHeader = "Consider this from external data:\n"; 
 
       if (contextSourceUsed === 'r/sandiego') {
         contextHeader = "Consider this from recent community discussions on r/sandiego:\n";
@@ -217,8 +211,6 @@ const ChatInterface = () => {
       console.log(`[ChatInterface] Context from ${contextSourceUsed} was added to the prompt. actualContextWasAddedToPrompt = true`);
     } else {
       console.log(`[ChatInterface] No suitable external context was found or added to prompt. actualContextWasAddedToPrompt = false.`);
-       // Optionally, inform user if all sources failed.
-       // setMessages((prev) => [...prev, {id: `context_info_${Date.now()}`, text: `ℹ️ I couldn't find specific local details for this, but I'll answer based on my general knowledge.`, sender: 'context-info', timestamp: new Date()}]);
     }
     
     console.log('[ChatInterface] Sending to /api/chat. Augmented message:', JSON.stringify(augmentedMessage));
@@ -433,7 +425,7 @@ const ChatInterface = () => {
       </ScrollArea>
 
       {showSuggestions && messages.length === 0 && !isLoading && !isFetchingContext && (
-        <div className="p-4 border-t bg-background/50">
+        <ScrollArea className="p-4 border-t bg-background/50 max-h-48" > {/* Added max-h-48 and ScrollArea here */}
           <p className="text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
             <HelpCircle size={16} />
             Not sure what to ask? Try one of these:
@@ -451,7 +443,7 @@ const ChatInterface = () => {
               </Button>
             ))}
           </div>
-        </div>
+        </ScrollArea>
       )}
 
       <form onSubmit={handleFormSubmit} className="p-4 flex items-center gap-2 border-t bg-background">
@@ -473,4 +465,3 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
-

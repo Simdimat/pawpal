@@ -19,14 +19,15 @@ import { cn } from '@/lib/utils';
 export default function HomePage() {
   const [isChatOpen, setIsChatOpen] = useState(true);
 
-  // Estimate header height + top page padding for sticky positioning.
-  // Header is roughly 60-70px. Page container (in layout) has py-8 (32px top padding).
-  // So, sticky top should be around 32px from the top of the page content area.
-  const stickyChatTopOffset = "2rem"; // Corresponds to py-8 top padding of the page container
-  // Max height for chat: viewport height - header height - page top padding - page bottom padding
-  // Approx: 100vh - 70px (header) - 32px (page top pad) - 32px (page bottom pad) = 100vh - 134px
-  // Or more simply, 100% of viewport height minus the offset from the top and some bottom margin.
-  const chatMaxHeight = `calc(100vh - ${stickyChatTopOffset} - 70px - 2rem)`; // 70px for header, 2rem for bottom margin
+  // stickyChatTopOffset aligns with the top padding of the main content area (py-8 from layout.tsx)
+  const stickyChatTopOffset = "2rem"; // 32px
+
+  // Approximate heights: Header ~66px, Footer ~60px. Page container has py-8 (32px top/bottom padding).
+  // Max height for sticky chat column: ViewportHeight - Header - ItsOwnTopOffset_relativeToContentArea - PageBottomPadding - Footer
+  // MaxHeight = 100vh - HeaderHeight(66px) - TopOffsetForColumn(32px) - PageBottomPadding(32px) - FooterHeight(60px)
+  // MaxHeight = 100vh - (66 + 32 + 32 + 60)px = 100vh - 190px
+  const chatMaxHeight = `calc(100vh - 190px)`;
+
 
   return (
     <div className="flex flex-col md:flex-row w-full gap-x-6">
@@ -124,21 +125,15 @@ export default function HomePage() {
       </div>
 
       {/* Right Column - Chatbot */}
-      {/* This column will be sticky below the header. The page has py-8, header is sticky above it.
-          So top for sticky is relative to the start of this py-8 padded area.
-          `h-[calc(100vh_-_HEADER_HEIGHT_-_PAGE_TOP_PADDING_-_PAGE_BOTTOM_PADDING)]`
-          Header approx 70px. Page top/bottom padding 32px each. So, 100vh - 70px - 32px - 32px = 100vh - 134px
-      */}
       <div 
         className="w-full md:w-1/4 md:sticky self-start flex flex-col"
         style={{ top: stickyChatTopOffset, maxHeight: chatMaxHeight }}
       >
         {isChatOpen ? (
           <Card className="w-full flex-1 flex flex-col shadow-xl border border-border rounded-lg overflow-hidden min-h-0">
-            {/* flex-1 makes card take available space in sticky container, min-h-0 for flex child scroll */}
             <CardHeader className="text-center border-b relative py-3 shrink-0">
               <div className="flex items-center justify-center gap-2">
-                <MessageCircle className="w-5 h-5 text-primary" /> {/* Updated Icon */}
+                <MessageCircle className="w-5 h-5 text-primary" />
                 <CardTitle className="text-md font-headline text-primary">Ask PawPal AI</CardTitle>
               </div>
               <Button
@@ -151,7 +146,6 @@ export default function HomePage() {
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </CardHeader>
-            {/* ChatInterface has its own ScrollArea and is set to flex-grow within its parent div */}
             <ChatInterface />
           </Card>
         ) : (
@@ -161,7 +155,7 @@ export default function HomePage() {
               onClick={() => setIsChatOpen(true)}
               aria-label="Open chat"
             >
-              <MessageCircle className="w-5 h-5" /> {/* Updated Icon */}
+              <MessageCircle className="w-5 h-5" />
               <span>Ask PawPal</span>
               <ChevronUp className="h-4 w-4 ml-1" />
             </Button>
@@ -171,4 +165,3 @@ export default function HomePage() {
     </div>
   );
 }
-
