@@ -25,7 +25,7 @@ const suggestedQuestionsList = [
 ];
 
 const getChatUserId = (): string => {
-  let userId = localStorage.getItem('pawpal_chat_user_id'); 
+  let userId = localStorage.getItem('pawpal_chat_user_id');
   if (!userId) {
     userId = `user_openai_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     localStorage.setItem('pawpal_chat_user_id', userId);
@@ -83,7 +83,7 @@ const ChatInterface = () => {
         loadHistory(id);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+  }, []);
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -92,9 +92,9 @@ const ChatInterface = () => {
   }, [messages]);
 
   const noResultsOrErrorMessages = [
-      "No specific discussions found", 
+      "No specific discussions found",
       "Could not extract a concise summary",
-      "Could not find specific community discussions", 
+      "Could not find specific community discussions",
       "Could not fetch Reddit context",
       "Error fetching Reddit context",
       "Error fetching context from r/sandiego",
@@ -112,14 +112,14 @@ const ChatInterface = () => {
     }
     return !noResultsOrErrorMessages.some(msg => context.includes(msg));
   };
-  
+
   const fetchContextAPI = async (apiEndpoint: string, query: string, contextName: string): Promise<{ context: string | null; source: string | null }> => {
     const contextMsgId = `context_${contextName}_${Date.now()}`;
     setMessages((prev) => [...prev, {id: contextMsgId, text: `Checking for relevant ${contextName} data...`, sender: 'context-info', timestamp: new Date()}]);
 
     try {
       const response = await fetch(`${apiEndpoint}?query=${encodeURIComponent(query)}`);
-      setMessages(prev => prev.filter(m => m.id !== contextMsgId)); 
+      setMessages(prev => prev.filter(m => m.id !== contextMsgId));
 
       if (!response.ok) {
         console.warn(`[ChatInterface] Failed to fetch ${contextName} context, API responded with non-OK status:`, response.status);
@@ -133,7 +133,7 @@ const ChatInterface = () => {
       return data;
     } catch (error) {
       console.error(`[ChatInterface] Error fetching ${contextName} context:`, error);
-      setMessages(prev => prev.filter(m => m.id !== contextMsgId)); 
+      setMessages(prev => prev.filter(m => m.id !== contextMsgId));
       setMessages((prev) => [...prev, {id: `context_error_${contextName}_${Date.now()}`, text: `ℹ️ Error fetching ${contextName} context. Proceeding without it.`, sender: 'context-info', timestamp: new Date()}]);
       return { context: null, source: null };
     }
@@ -153,22 +153,24 @@ const ChatInterface = () => {
     if (input === messageText) {
         setInput('');
     }
-    
+
     if (showSuggestions) setShowSuggestions(false);
-    
+
     let augmentedMessage = messageText;
     let contextForPrompt: string | null = null;
     let contextSourceUsed: string | null = null;
 
-    setIsFetchingContext(true); 
+    setIsFetchingContext(true);
 
+    // 1. Try Reddit
     const redditData = await fetchContextAPI('/api/reddit-context', messageText, 'Reddit');
     if (isContextValidAndNotEmpty(redditData.context, redditData.source)) {
       contextForPrompt = redditData.context;
-      contextSourceUsed = redditData.source;
+      contextSourceUsed = redditData.source; // Will be 'r/sandiego' or 'general_reddit'
       console.log(`[ChatInterface] Using Reddit context from ${contextSourceUsed}.`);
     }
 
+    // 2. Try Yelp if Reddit failed or was insufficient
     if (!contextForPrompt) {
       const yelpData = await fetchContextAPI('/api/yelp-context', messageText, 'Yelp');
       if (isContextValidAndNotEmpty(yelpData.context, yelpData.source)) {
@@ -178,20 +180,21 @@ const ChatInterface = () => {
       }
     }
 
+    // 3. Try Petfinder if both Reddit and Yelp failed or were insufficient
     if (!contextForPrompt) {
       const petfinderData = await fetchContextAPI('/api/petfinder-context', messageText, 'Petfinder');
       if (isContextValidAndNotEmpty(petfinderData.context, petfinderData.source)) {
         contextForPrompt = petfinderData.context;
-        contextSourceUsed = petfinderData.source; 
+        contextSourceUsed = petfinderData.source;
         console.log(`[ChatInterface] Using Petfinder context.`);
       }
     }
-    
-    setIsFetchingContext(false); 
+
+    setIsFetchingContext(false);
 
     if (contextForPrompt && contextSourceUsed) {
       const cleanedContext = contextForPrompt.replace(/\n{2,}/g, '\n').trim();
-      let contextHeader = "Consider this from external data:\n"; 
+      let contextHeader = "Consider this from external data:\n";
 
       if (contextSourceUsed === 'r/sandiego') {
         contextHeader = "Consider this from recent community discussions on r/sandiego:\n";
@@ -206,24 +209,24 @@ const ChatInterface = () => {
         contextHeader = "Consider this from Petfinder shelter data:\n";
         setMessages((prev) => [...prev, {id: `context_added_${Date.now()}`, text: `ℹ️ I've included some information from Petfinder in my considerations.`, sender: 'context-info', timestamp: new Date()}]);
       }
-      
+
       augmentedMessage = `${messageText}\n\n${contextHeader}${cleanedContext}`;
       console.log(`[ChatInterface] Context from ${contextSourceUsed} was added to the prompt. actualContextWasAddedToPrompt = true`);
     } else {
       console.log(`[ChatInterface] No suitable external context was found or added to prompt. actualContextWasAddedToPrompt = false.`);
     }
-    
+
     console.log('[ChatInterface] Sending to /api/chat. Augmented message:', JSON.stringify(augmentedMessage));
     setIsLoading(true);
-    let aiMessageId = `ai_${Date.now()}`; 
+    let aiMessageId = `ai_${Date.now()}`;
 
     try {
-      const response = await fetch('/api/chat', { 
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           user_id: chatUserId,
-          message: augmentedMessage, 
+          message: augmentedMessage,
         }),
       });
 
@@ -237,7 +240,7 @@ const ChatInterface = () => {
         }
         throw new Error(serverErrorMessage);
       }
-      
+
       if (!response.body) {
         throw new Error('Response body is null. Cannot process stream.');
       }
@@ -245,10 +248,10 @@ const ChatInterface = () => {
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let aiPartialResponse = '';
-      
+
       const aiPlaceholderMessage: Message = {
         id: aiMessageId,
-        text: '', 
+        text: '',
         sender: 'ai',
         timestamp: new Date(),
       };
@@ -268,8 +271,8 @@ const ChatInterface = () => {
           if (line.startsWith('data: ')) {
             const raw = line.substring('data: '.length).trim();
             if (raw === '[DONE]') {
-              doneStreaming = true; 
-              break; 
+              doneStreaming = true;
+              break;
             }
             if (raw.startsWith("[ERROR]")) {
               console.error("[ChatInterface] SSE Stream Error:", raw);
@@ -279,7 +282,7 @@ const ChatInterface = () => {
                   const parsedError = JSON.parse(streamedErrorMsg);
                   finalErrorMsg = parsedError.message || parsedError.error || parsedError.detail || streamedErrorMsg;
               } catch (e) {
-                  finalErrorMsg = streamedErrorMsg; 
+                  finalErrorMsg = streamedErrorMsg;
               }
               throw new Error(`Stream Error: ${finalErrorMsg}`);
             }
@@ -296,7 +299,7 @@ const ChatInterface = () => {
             }
           }
         }
-         if (doneStreaming) break; 
+         if (doneStreaming) break;
       }
 
       let finalAiText = aiPartialResponse;
@@ -306,7 +309,7 @@ const ChatInterface = () => {
         else if (contextSourceUsed === 'general_reddit') sourceLabel = "Reddit";
         else if (contextSourceUsed === 'yelp') sourceLabel = "Yelp";
         else if (contextSourceUsed === 'petfinder') sourceLabel = "Petfinder";
-        
+
         finalAiText += ` (Derived from ${sourceLabel}!)`;
         console.log(`[ChatInterface] Appending "(Derived from ${sourceLabel}!)" to AI response.`);
       } else {
@@ -322,15 +325,15 @@ const ChatInterface = () => {
 
     } catch (error) {
       console.error('[ChatInterface] Error sending message or processing response:', error);
-      const errorMessage = (error instanceof Error && error.message) 
-        ? error.message 
+      const errorMessage = (error instanceof Error && error.message)
+        ? error.message
         : 'Could not get response from PawPal. Please try again.';
       toast({
         title: 'Chat Error',
         description: errorMessage.substring(0, 300),
         variant: 'destructive',
       });
-      
+
       const existingAiMsgIndex = messages.findIndex(msg => msg.id === aiMessageId && msg.text === '');
       if (existingAiMsgIndex > -1) {
            setMessages((prevMessages) =>
@@ -338,7 +341,7 @@ const ChatInterface = () => {
               msg.id === aiMessageId ? { ...msg, text: `Sorry, I encountered an error: ${errorMessage.substring(0,100)}...` } : msg
             )
           );
-      } else if (!messages.some(msg => msg.id === aiMessageId)) { 
+      } else if (!messages.some(msg => msg.id === aiMessageId)) {
           const errorPlaceholderMessage: Message = {
             id: `ai_error_${Date.now()}`,
             text: `Sorry, I encountered an error: ${errorMessage.substring(0,100)}...`,
@@ -416,7 +419,7 @@ const ChatInterface = () => {
                     <AvatarFallback><Bot size={18}/></AvatarFallback>
                 </Avatar>
                 <div className="max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap bg-card text-card-foreground border">
-                    <Loader2 className="h-4 w-4 animate-spin" /> 
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     {isFetchingContext && <span className="ml-2 text-xs italic">Thinking...</span>}
                 </div>
              </div>
@@ -436,7 +439,7 @@ const ChatInterface = () => {
                 key={i}
                 variant="outline"
                 size="sm"
-                className="text-xs h-auto py-1.5 px-3 bg-card hover:bg-secondary"
+                className="text-xs h-auto py-1.5 px-3 bg-card hover:bg-secondary whitespace-normal text-left"
                 onClick={() => handleSuggestionClick(q)}
               >
                 {q}

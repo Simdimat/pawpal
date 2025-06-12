@@ -22,11 +22,13 @@ export default function HomePage() {
   // stickyChatTopOffset aligns with the top padding of the main content area (py-8 from layout.tsx)
   const stickyChatTopOffset = "2rem"; // 32px
 
-  // Approximate heights: Header ~66px, Footer ~60px. Page container has py-8 (32px top/bottom padding).
-  // Max height for sticky chat column: ViewportHeight - Header - ItsOwnTopOffset_relativeToContentArea - PageBottomPadding - Footer
-  // MaxHeight = 100vh - HeaderHeight(66px) - TopOffsetForColumn(32px) - PageBottomPadding(32px) - FooterHeight(60px)
-  // MaxHeight = 100vh - (66 + 32 + 32 + 60)px = 100vh - 190px
-  const chatMaxHeight = `calc(100vh - 190px)`;
+  // Max height for sticky chat column:
+  // ViewportHeight - EffectiveTopOffsetOfStickyColumn - PageBottomPadding - FooterHeight
+  // EffectiveTopOffset = HeaderHeight (approx 66px) + PageContainerTopPadding (32px) + stickyChatTopOffset (32px) = 130px
+  // PageBottomPadding = 32px (from layout.tsx py-8)
+  // FooterHeight = approx 60px
+  // MaxHeight = 100vh - (130px + 32px + 60px) = 100vh - 222px
+  const chatMaxHeight = `calc(100vh - 222px)`;
 
 
   return (
@@ -125,7 +127,7 @@ export default function HomePage() {
       </div>
 
       {/* Right Column - Chatbot */}
-      <div 
+      <div
         className="w-full md:w-1/4 md:sticky self-start flex flex-col"
         style={{ top: stickyChatTopOffset, maxHeight: chatMaxHeight }}
       >
