@@ -12,12 +12,12 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Filter, Search, AlertTriangle, Loader2, ExternalLink, Eye, ChevronDown, MapIcon } from "lucide-react"; // Added MapIcon
+import { Filter, Search, AlertTriangle, Loader2, ExternalLink, Eye, ChevronDown, MapIcon } from "lucide-react";
 import Image from "next/image";
 import type { YelpBusiness } from '@/services/yelp';
 import type { PetfinderOrganization } from '@/services/petfinder';
 
-// Keep dynamic imports for TileLayer, Marker, Popup if we re-enable map later
+const DynamicMapContainer = dynamic(() => import('react-leaflet').then(mod => mod.MapContainer), { ssr: false });
 const DynamicTileLayer = dynamic(() => import('react-leaflet').then(mod => mod.TileLayer), { ssr: false });
 const DynamicMarker = dynamic(() => import('react-leaflet').then(mod => mod.Marker), { ssr: false });
 const DynamicPopup = dynamic(() => import('react-leaflet').then(mod => mod.Popup), { ssr: false });
@@ -63,7 +63,6 @@ export default function PetMapDisplay() {
   const [leafletLib, setLeafletLib] = useState<typeof LType | null>(null);
   const [mapIconsConfigured, setMapIconsConfigured] = useState(false);
   
-  // mapRef and markerRefs are not strictly needed if map is placeholder-ed, but keep for now
   const mapRef = useRef<LType.Map | null>(null); 
   const markerRefs = useRef(new Map<string, LType.Marker>());
 
@@ -76,9 +75,7 @@ export default function PetMapDisplay() {
         setMapIconsConfigured(true);
       }).catch(err => {
         console.error("Failed to load Leaflet library:", err);
-        // Set error state so user knows map won't load
         setError("Map components failed to load. Map functionality will be disabled.");
-        // Ensure canRenderMap evaluates to false if Leaflet fails to load
         setLeafletLib(null); 
         setMapIconsConfigured(false);
       });
@@ -132,7 +129,7 @@ export default function PetMapDisplay() {
                     imageUrl: org.photos?.[0]?.medium,
                     websiteUrl: org.website || org.url,
                     dataAiHint: "animal shelter",
-                    latitude: undefined, 
+                    latitude: undefined, // Petfinder orgs often don't have lat/lon directly
                     longitude: undefined,
                 }));
                 combinedLocations.push(...petfinderPlaces);
@@ -141,6 +138,7 @@ export default function PetMapDisplay() {
             }
         }
         
+        // Filter out locations without valid lat/lon for map display
         const uniqueLocations = Array.from(new Map(combinedLocations.map(item => [item.id, item])).values())
                                   .filter(loc => typeof loc.latitude === 'number' && typeof loc.longitude === 'number'); 
         setAllFetchedLocations(uniqueLocations);
@@ -165,7 +163,6 @@ export default function PetMapDisplay() {
     setDisplayedLocations(newFilteredPlaces);
 
     if (!isLoading && newFilteredPlaces.length === 0 && (searchQuery || activeFilters.size < filterOptions.length || (activeFilters.size > 0 && allFetchedLocations.length > 0) )) {
-      // Set error only if it's not already a map loading error
       if (!error?.includes("Map components failed to load")) {
         setError("No locations match your current filters or search.");
       }
@@ -179,7 +176,7 @@ export default function PetMapDisplay() {
       }
     }
 
-  }, [searchQuery, activeFilters, allFetchedLocations, isLoading, error]); // Added error to dependency array
+  }, [searchQuery, activeFilters, allFetchedLocations, isLoading, error]);
 
   const handleFilterChange = (type: PlaceType, checked: boolean) => {
     setActiveFilters(prev => {
@@ -195,6 +192,19 @@ export default function PetMapDisplay() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+  };
+
+  const flyToLocation = (lat?: number, lon?: number, zoomLevel: number = 15) => {
+    if (mapRef.current && typeof lat === 'number' && typeof lon === 'number') {
+      mapRef.current.flyTo([lat, lon], zoomLevel);
+    }
+  };
+
+  const openPopupForLocation = (locationId: string) => {
+    const marker = markerRefs.current.get(locationId);
+    if (marker) {
+      marker.openPopup();
+    }
   };
 
   const canRenderMap = clientMounted && leafletLib && mapIconsConfigured;
@@ -254,14 +264,47 @@ export default function PetMapDisplay() {
                {clientMounted && leafletLib && !mapIconsConfigured && <p className="text-xs text-muted-foreground mt-1">Configuring map icons...</p>}
             </div>
           ) : (
-            // Placeholder for the map to prevent initialization error
-            <div className="w-full h-full flex flex-col items-center justify-center bg-gray-100 p-4">
-              <MapIcon className="w-16 h-16 text-gray-400 mb-4" />
-              <p className="text-lg font-semibold text-gray-600">Map Display Area</p>
-              <p className="text-sm text-gray-500 text-center">
-                The interactive map is temporarily unavailable. <br/> Location data will be listed below.
-              </p>
-            </div>
+            <DynamicMapContainer
+              center={SAN_DIEGO_COORDS}
+              zoom={DEFAULT_ZOOM}
+              style={{ height: '100%', width: '100%', borderRadius: '0.5rem', zIndex: 0 }}
+              whenCreated={(mapInstance) => { mapRef.current = mapInstance; }}
+              scrollWheelZoom={true}
+            >
+              <DynamicTileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              />
+              {displayedLocations.map(loc => {
+                if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+                  return (
+                    <DynamicMarker
+                      key={loc.id}
+                      position={[loc.latitude, loc.longitude]}
+                      ref={(el) => { if (el) markerRefs.current.set(loc.id, el); }}
+                    >
+                      <DynamicPopup>
+                        <div className="text-sm w-48"> {/* Added w-48 for consistent popup width */}
+                          <h3 className="font-semibold text-md mb-1 truncate" title={loc.name}>{loc.name}</h3>
+                          {loc.address && <p className="text-xs text-muted-foreground mb-1 truncate" title={loc.address}>{loc.address}</p>}
+                          {loc.websiteUrl && (
+                            <a
+                              href={loc.websiteUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline text-xs flex items-center truncate"
+                            >
+                              Visit Website <ExternalLink className="ml-1 h-3 w-3 flex-shrink-0" />
+                            </a>
+                          )}
+                        </div>
+                      </DynamicPopup>
+                    </DynamicMarker>
+                  );
+                }
+                return null;
+              })}
+            </DynamicMapContainer>
           )}
         </div>
 
@@ -288,7 +331,7 @@ export default function PetMapDisplay() {
                           height={150}
                           className="w-full h-24 object-cover rounded-md mb-2"
                           data-ai-hint={loc.dataAiHint || loc.type.toLowerCase()}
-                          unoptimized={loc.imageUrl?.includes('cloudfront.net')} 
+                          unoptimized={loc.imageUrl?.includes('cloudfront.net') || loc.imageUrl?.includes('yelpcdn.com')} // Added yelpcdn
                         />
                         <h4 className="font-semibold text-md text-primary">{loc.name}</h4>
                         <p className="text-sm text-muted-foreground">{loc.type} - {loc.address}</p>
@@ -299,9 +342,19 @@ export default function PetMapDisplay() {
                             </a>
                           </Button>
                         )}
-                        {/* Button is now fully a placeholder */}
-                        <Button variant="outline" size="sm" className="mt-2 w-full text-xs" disabled={true}>
-                          <Eye className="mr-2 h-3 w-3" /> Map View Disabled
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="mt-2 w-full text-xs"
+                          onClick={() => {
+                            if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+                              flyToLocation(loc.latitude, loc.longitude);
+                              setTimeout(() => openPopupForLocation(loc.id), 500); 
+                            }
+                          }}
+                          disabled={!(typeof loc.latitude === 'number' && typeof loc.longitude === 'number') || !canRenderMap}
+                        >
+                          <Eye className="mr-2 h-3 w-3" /> View on Map
                         </Button>
                       </div>
                     ))}
@@ -323,4 +376,6 @@ export default function PetMapDisplay() {
     </div>
   );
 }
+    
+
     
