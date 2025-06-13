@@ -1,37 +1,41 @@
+import type { Metadata } from 'next';
+import './globals.css';
+import 'maplibre-gl/dist/maplibre-gl.css'; // Add MapLibre GL CSS
+import { Toaster } from '@/components/ui/toaster';
+import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
+import { Providers } from '@/components/Providers';
 
-// src/lib/leaflet-default-icon.ts
-// Do NOT import L from 'leaflet' at the top level here.
-// Pass it as an argument to the configure function.
-import type LType from 'leaflet';
+export const metadata: Metadata = {
+  title: 'PawPal SD - Your AI Companion for San Diego Pet Life',
+  description: 'Your AI Companion for San Diego Pet Life. Find vets, parks, emergency info, and more.',
+  manifest: '/manifest.json',
+};
 
-// Add a declaration for the global flag on the Window interface
-declare global {
-  interface Window {
-    L_DefaultIconConfigured?: boolean;
-  }
-}
-
-export function configureLeafletDefaultIcon(L_instance: typeof LType): void {
-  // Check if already configured
-  if (typeof window !== 'undefined' && window.L_DefaultIconConfigured) {
-    return;
-  }
-
-  const DefaultIcon = L_instance.icon({
-    iconUrl: '/leaflet/marker-icon.png',
-    iconRetinaUrl: '/leaflet/marker-icon-2x.png',
-    shadowUrl: '/leaflet/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    tooltipAnchor: [16, -28],
-    shadowSize: [41, 41],
-  });
-
-  L_instance.Marker.prototype.options.icon = DefaultIcon;
-
-  // Set the flag after configuration
-  if (typeof window !== 'undefined') {
-    window.L_DefaultIconConfigured = true;
-  }
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" suppressHydrationWarning style={{ scrollBehavior: 'smooth' }}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" />
+        <link rel="icon" href="/assets/images/favicon.ico" sizes="any" />
+      </head>
+      <body className="font-body antialiased min-h-screen flex flex-col">
+        <Providers>
+          <Header />
+          {/* The main tag in page.tsx will now handle the flex-grow for its content area */}
+          <div className="relative z-0 flex-grow container mx-auto px-4 py-8">
+            {children}
+          </div>
+          <Footer />
+          <Toaster />
+        </Providers>
+      </body>
+    </html>
+  );
 }

@@ -1,11 +1,10 @@
 // @refresh reset
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import type LType from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import { configureLeafletDefaultIcon } from '@/lib/leaflet-default-icon';
+import maplibregl, { LngLatLike } from 'maplibre-gl';
+import type { MapRef, ViewStateChangeEvent } from 'react-map-gl';
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,16 +12,15 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Filter, Search, AlertTriangle, Loader2, ExternalLink, Eye, ChevronDown } from "lucide-react";
+import { Filter, Search, AlertTriangle, Loader2, ExternalLink, Eye, ChevronDown, Pin } from "lucide-react";
 import Image from "next/image";
 import type { YelpBusiness } from '@/services/yelp';
 import type { PetfinderOrganization } from '@/services/petfinder';
 
-// --- Dynamic Imports for Leaflet components ---
-const DynamicMapContainer = dynamic(() => import('react-leaflet').then(mod => mod.MapContainer), { ssr: false });
-const DynamicTileLayer = dynamic(() => import('react-leaflet').then(mod => mod.TileLayer), { ssr: false });
-const DynamicMarker = dynamic(() => import('react-leaflet').then(mod => mod.Marker), { ssr: false });
-const DynamicPopup = dynamic(() => import('react-leaflet').then(mod => mod.Popup), { ssr: false });
+// --- Dynamic Imports for react-map-gl components ---
+const MapGL = dynamic(() => import('react-map-gl').then(mod => mod.Map), { ssr: false, loading: () => <MapLoader message="Loading map library..." /> });
+const MarkerGL = dynamic(() => import('react-map-gl').then(mod => mod.Marker), { ssr: false });
+const PopupGL = dynamic(() => import('react-map-gl').then(mod => mod.Popup), { ssr: false });
 
 // --- Type Definitions and Constants ---
 type PlaceType = 'Park' | 'Beach' | 'Vet' | 'Restaurant' | 'Shelter';
@@ -44,8 +42,16 @@ const filterOptions: { id: string; label: string; type: PlaceType; yelpCategory?
   { id: 'restaurants', label: 'Pet-Friendly Restaurants', type: 'Restaurant', yelpCategory: 'restaurants,petfriendly' },
   { id: 'shelters', label: 'Shelters', type: 'Shelter', petfinderType: true },
 ];
-const SAN_DIEGO_COORDS: [number, number] = [32.7157, -117.1611];
-const DEFAULT_ZOOM = 11;
+
+const SAN_DIEGO_INITIAL_VIEW_STATE = {
+  longitude: -117.1611,
+  latitude: 32.7157,
+  zoom: 10.5,
+  pitch: 0,
+  bearing: 0,
+};
+
+const MAP_STYLE = "https://demotiles.maplibre.org/style.json"; // A free, public style from MapLibre
 
 // --- Helper Component for Loading State ---
 const MapLoader = ({ message, details }: { message: string, details?: string }) => (
@@ -56,7 +62,6 @@ const MapLoader = ({ message, details }: { message: string, details?: string }) 
     </div>
 );
 
-
 export default function PetMapDisplay() {
   const [allFetchedLocations, setAllFetchedLocations] = useState<Place[]>([]);
   const [displayedLocations, setDisplayedLocations] = useState<Place[]>([]);
@@ -64,53 +69,33 @@ export default function PetMapDisplay() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // --- State for Map Readiness ---
+  
+  const [viewState, setViewState] = useState(SAN_DIEGO_INITIAL_VIEW_STATE);
+  const [selectedLocationPopup, setSelectedLocationPopup] = useState<Place | null>(null);
+  const [mapReady, setMapReady] = useState(false);
   const [clientMounted, setClientMounted] = useState(false);
-  const [mapLibraryLoaded, setMapLibraryLoaded] = useState(false);
-  // A unique key for each map instance to force React to create a new DOM node
-  const [mapKey, setMapKey] = useState(() => `map-${Date.now()}-${Math.random().toString(36).substring(2,9)}`);
+  const [mapKey, setMapKey] = useState(() => `map-${Date.now()}-${Math.random()}`);
 
-  const mapRef = useRef<LType.Map | null>(null);
-  const markerRefs = useRef(new Map<string, LType.Marker>());
+  const mapRef = useRef<MapRef | null>(null);
 
-  // --- CRITICAL FIX 1: The Cleanup useEffect ---
-  useEffect(() => {
-    return () => {
-      if (mapRef.current) {
-        console.log("[PetMapDisplay] Cleanup: Unmounting component. Destroying Leaflet map instance for mapKey:", mapKey, mapRef.current);
-        const map = mapRef.current;
-        const container = map.getContainer();
-        map.off(); 
-        map.remove(); 
-        
-        if (container && (container as any)._leaflet_id) {
-          delete (container as any)._leaflet_id;
-           console.log("[PetMapDisplay] Cleanup: Cleared _leaflet_id from container for mapKey:", mapKey);
-        }
-        mapRef.current = null;
-      }
-    };
-  }, [mapKey]); // Depend on mapKey to re-run cleanup if the key changes, though primary use is unmount.
-
-  // Effect for client-side library loading
   useEffect(() => {
     setClientMounted(true);
-    if (typeof window !== 'undefined') {
-      import('leaflet').then(L_instance => {
-        configureLeafletDefaultIcon(L_instance);
-        setMapLibraryLoaded(true);
-        console.log("[PetMapDisplay] Leaflet library loaded and icons configured.");
-      }).catch(err => {
-        console.error("[PetMapDisplay] Failed to load Leaflet library:", err);
-        setError("Map components failed to load. Map functionality will be disabled.");
-        setMapLibraryLoaded(false);
-      });
-    }
   }, []);
+  
+  useEffect(() => {
+    // This is primarily to ensure that if HMR causes issues, we have a way to force a fresh map.
+    // The main cleanup for map instances with maplibre-gl is usually handled by react-map-gl itself
+    // when the <MapGL> component unmounts.
+    return () => {
+      // No explicit map.remove() is typically needed with react-map-gl like it is with raw Leaflet.
+      // react-map-gl handles its lifecycle.
+      console.log("PetMapDisplay is unmounting or mapKey changed.");
+    };
+  }, [mapKey]);
+
 
   // Effect for fetching initial location data
- useEffect(() => {
+  useEffect(() => {
     const fetchInitialData = async () => {
       setIsLoading(true);
       setError(null);
@@ -157,7 +142,7 @@ export default function PetMapDisplay() {
                     imageUrl: org.photos?.[0]?.medium,
                     websiteUrl: org.website || org.url,
                     dataAiHint: "animal shelter",
-                    latitude: undefined, // Petfinder orgs might not have lat/lon directly
+                    latitude: undefined, 
                     longitude: undefined,
                 }));
                 combinedLocations.push(...petfinderPlaces);
@@ -191,55 +176,54 @@ export default function PetMapDisplay() {
     setDisplayedLocations(newFilteredPlaces);
 
     if (!isLoading && newFilteredPlaces.length === 0 && (searchQuery || activeFilters.size < filterOptions.length || (activeFilters.size > 0 && allFetchedLocations.length > 0) )) {
-      if (!error?.includes("Map components failed to load")) { // Don't overwrite map load error
         setError("No locations match your current filters or search.");
-      }
     } else if (!isLoading && newFilteredPlaces.length > 0) {
-      if (!error?.includes("Map components failed to load")) { // Don't clear map load error
         setError(null); 
-      }
     } else if (!isLoading && allFetchedLocations.length === 0 && activeFilters.size === filterOptions.length && !searchQuery){
-      // If everything is loaded, no filters applied, no search, and still no locations, clear generic errors
-      if (!error?.includes("Map components failed to load")) {
         setError(null);
-      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, activeFilters, allFetchedLocations, isLoading]);
 
-
   const handleFilterChange = (type: PlaceType, checked: boolean) => {
     setActiveFilters(prev => {
       const newFilters = new Set(prev);
-      if (checked) {
-        newFilters.add(type);
-      } else {
-        newFilters.delete(type);
-      }
+      if (checked) newFilters.add(type);
+      else newFilters.delete(type);
       return newFilters;
     });
   };
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Search is applied reactively by the useEffect above
-  };
+  const handleSearchSubmit = (e: React.FormEvent) => e.preventDefault();
 
-  const flyToLocation = (lat?: number, lon?: number, zoomLevel: number = 15) => {
+  const flyToLocation = useCallback((lat?: number, lon?: number, zoomLevel: number = 14) => {
     if (mapRef.current && typeof lat === 'number' && typeof lon === 'number') {
-      mapRef.current.flyTo([lat, lon], zoomLevel);
+      mapRef.current.flyTo({ center: [lon, lat] as LngLatLike, zoom: zoomLevel, duration: 1500 });
+    }
+  }, []);
+
+  const handleMarkerClick = (loc: Place) => {
+    setSelectedLocationPopup(loc);
+    if (loc.latitude && loc.longitude) {
+        // Optional: slightly adjust center if popup is too large or marker is at edge
+        flyToLocation(loc.latitude, loc.longitude, viewState.zoom < 13 ? 13 : viewState.zoom);
     }
   };
 
-  const openPopupForLocation = (locationId: string) => {
-    const marker = markerRefs.current.get(locationId);
-    if (marker && mapRef.current) { 
-      marker.openPopup();
-    }
-  };
+  const handleMapLoad = useCallback(() => {
+    setMapReady(true);
+    console.log("MapLibre map loaded.");
+  }, []);
 
-  const canRenderMap = clientMounted && mapLibraryLoaded;
+  const onMapMove = useCallback((evt: ViewStateChangeEvent) => {
+    setViewState(evt.viewState);
+  }, []);
+
   const showScrollIndicator = !isLoading && !error && displayedLocations.length > 2;
+
+  if (!clientMounted) {
+    return <MapLoader message="Initializing map components..." />;
+  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 min-h-[600px]">
@@ -283,65 +267,66 @@ export default function PetMapDisplay() {
 
       <div className="md:col-span-2 space-y-4">
         <div
-          key={mapKey} // This key forces React to create a fresh div on remount
-          className="h-[300px] md:h-[400px] bg-muted rounded-lg shadow-inner flex items-center justify-center relative overflow-hidden border"
+           key={mapKey} // Force re-creation of this div and thus the map if key changes
+           className="h-[400px] md:h-[400px] bg-muted rounded-lg shadow-inner flex items-center justify-center relative overflow-hidden border"
         >
-          {!canRenderMap ? (
-            <MapLoader
-              message={clientMounted ? "Loading map library..." : "Initializing client components..."}
-              details={error && error.includes("Map components failed to load") ? error : undefined}
-            />
-          ) : (
-            <DynamicMapContainer
-              id={`map-instance-${mapKey}`} // Use mapKey to ensure unique DOM ID for Leaflet
-              center={SAN_DIEGO_COORDS}
-              zoom={DEFAULT_ZOOM}
-              style={{ height: '100%', width: '100%', borderRadius: '0.5rem', zIndex: 0 }}
-              whenCreated={(mapInstance) => { 
-                if (mapRef.current && mapRef.current !== mapInstance) {
-                  console.warn("[PetMapDisplay] whenCreated: mapRef.current already exists and is different. Attempting cleanup of old ref.");
-                  mapRef.current.remove();
-                }
-                mapRef.current = mapInstance; 
-                console.log("[PetMapDisplay] Map instance created/updated for mapKey:", mapKey);
-              }}
-              scrollWheelZoom={true}
-            >
-              <DynamicTileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              />
-              {displayedLocations.map(loc => {
-                 if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
-                  return (
-                    <DynamicMarker
-                      key={loc.id}
-                      position={[loc.latitude, loc.longitude]}
-                      ref={(el) => { if (el) markerRefs.current.set(loc.id, el); }}
+          <MapGL
+            ref={mapRef}
+            mapLib={maplibregl}
+            initialViewState={SAN_DIEGO_INITIAL_VIEW_STATE}
+            style={{width: '100%', height: '100%', borderRadius: '0.5rem'}}
+            mapStyle={MAP_STYLE}
+            onLoad={handleMapLoad}
+            onMove={onMapMove}
+            // Other props like scrollZoom, dragPan, etc. are true by default
+          >
+            {mapReady && displayedLocations.map(loc => {
+              if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+                return (
+                  <MarkerGL
+                    key={loc.id}
+                    longitude={loc.longitude}
+                    latitude={loc.latitude}
+                    onClick={(e) => {
+                      e.originalEvent.stopPropagation(); // Important for react-map-gl
+                      handleMarkerClick(loc);
+                    }}
+                  >
+                    <Pin className="w-6 h-6 text-destructive fill-destructive/70 cursor-pointer" />
+                  </MarkerGL>
+                );
+              }
+              return null;
+            })}
+
+            {selectedLocationPopup && typeof selectedLocationPopup.latitude === 'number' && typeof selectedLocationPopup.longitude === 'number' && (
+              <PopupGL
+                longitude={selectedLocationPopup.longitude}
+                latitude={selectedLocationPopup.latitude}
+                onClose={() => setSelectedLocationPopup(null)}
+                closeButton={true}
+                closeOnClick={false} // Keep popup open when map is clicked, only close via its own button
+                anchor="bottom"
+                offset={25} // Adjust as needed for Pin icon
+              >
+                <div className="text-sm w-48 p-1">
+                  <h3 className="font-semibold text-md mb-1 truncate" title={selectedLocationPopup.name}>{selectedLocationPopup.name}</h3>
+                  {selectedLocationPopup.address && <p className="text-xs text-muted-foreground mb-1 truncate" title={selectedLocationPopup.address}>{selectedLocationPopup.address}</p>}
+                  {selectedLocationPopup.websiteUrl && (
+                    <a
+                      href={selectedLocationPopup.websiteUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline text-xs flex items-center truncate"
                     >
-                      <DynamicPopup>
-                        <div className="text-sm w-48">
-                          <h3 className="font-semibold text-md mb-1 truncate" title={loc.name}>{loc.name}</h3>
-                          {loc.address && <p className="text-xs text-muted-foreground mb-1 truncate" title={loc.address}>{loc.address}</p>}
-                          {loc.websiteUrl && (
-                            <a
-                              href={loc.websiteUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-primary hover:underline text-xs flex items-center truncate"
-                            >
-                              Visit Website <ExternalLink className="ml-1 h-3 w-3 flex-shrink-0" />
-                            </a>
-                          )}
-                        </div>
-                      </DynamicPopup>
-                    </DynamicMarker>
-                  );
-                }
-                return null;
-              })}
-            </DynamicMapContainer>
-          )}
+                      Visit Website <ExternalLink className="ml-1 h-3 w-3 flex-shrink-0" />
+                    </a>
+                  )}
+                </div>
+              </PopupGL>
+            )}
+          </MapGL>
+          {!mapReady && clientMounted && <MapLoader message="Loading map..." />}
         </div>
 
         <Card className="shadow-md">
@@ -350,9 +335,8 @@ export default function PetMapDisplay() {
           </CardHeader>
           <CardContent>
             {isLoading && <div className="flex items-center justify-center text-sm text-muted-foreground py-4"><Loader2 className="w-5 h-5 mr-2 animate-spin"/>Loading locations...</div>}
-            {error && !error.includes("Map components failed to load") && <div className="mt-4 text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
-            {error && error.includes("Map components failed to load") && <div className="mt-4 text-sm text-orange-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
-
+            {error && <div className="mt-4 text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
+            
             {!isLoading && !error && displayedLocations.length > 0 ? (
               <>
                 <ScrollArea className="h-[200px] md:h-[calc(100vh-650px)] min-h-[200px]"> 
@@ -384,10 +368,11 @@ export default function PetMapDisplay() {
                           onClick={() => {
                             if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
                               flyToLocation(loc.latitude, loc.longitude);
-                              setTimeout(() => openPopupForLocation(loc.id), 500); 
+                              // Delay showing popup slightly after flying to ensure map is centered
+                              setTimeout(() => setSelectedLocationPopup(loc), 50);
                             }
                           }}
-                          disabled={!(typeof loc.latitude === 'number' && typeof loc.longitude === 'number') || !canRenderMap}
+                          disabled={!(typeof loc.latitude === 'number' && typeof loc.longitude === 'number') || !mapReady}
                         >
                           <Eye className="mr-2 h-3 w-3" /> View on Map
                         </Button>
@@ -403,7 +388,7 @@ export default function PetMapDisplay() {
                 )}
               </>
             ) : (
-              !isLoading && (!error || error.includes("Map components failed to load")) && <p className="text-muted-foreground text-center py-4">No locations to display. Try adjusting your search or filters.</p>
+              !isLoading && !error && <p className="text-muted-foreground text-center py-4">No locations to display. Try adjusting your search or filters.</p>
             )}
           </CardContent>
         </Card>
