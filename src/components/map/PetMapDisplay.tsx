@@ -75,26 +75,23 @@ export default function PetMapDisplay() {
   const markerRefs = useRef(new Map<string, LType.Marker>());
 
   // --- CRITICAL FIX 1: The Cleanup useEffect ---
-  // This hook ensures that when the component unmounts, the Leaflet map instance is completely destroyed.
   useEffect(() => {
-    // The return function from useEffect with an empty dependency array [] is the cleanup function.
-    // It runs ONLY when the component is unmounted.
     return () => {
       if (mapRef.current) {
-        console.log("[PetMapDisplay] Cleanup: Unmounting component. Destroying Leaflet map instance.", mapRef.current);
+        console.log("[PetMapDisplay] Cleanup: Unmounting component. Destroying Leaflet map instance for mapKey:", mapKey, mapRef.current);
         const map = mapRef.current;
-        map.off(); // Remove all event listeners
-        map.remove(); // This is the crucial Leaflet command to destroy the map
-        // Attempt to clear Leaflet's internal flag from the DOM node, though map.remove() should handle it.
         const container = map.getContainer();
+        map.off(); 
+        map.remove(); 
+        
         if (container && (container as any)._leaflet_id) {
           delete (container as any)._leaflet_id;
-           console.log("[PetMapDisplay] Cleanup: Cleared _leaflet_id from container.");
+           console.log("[PetMapDisplay] Cleanup: Cleared _leaflet_id from container for mapKey:", mapKey);
         }
         mapRef.current = null;
       }
     };
-  }, []); // Empty dependency array means this cleanup runs only on final unmount.
+  }, [mapKey]); // Depend on mapKey to re-run cleanup if the key changes, though primary use is unmount.
 
   // Effect for client-side library loading
   useEffect(() => {
@@ -160,7 +157,7 @@ export default function PetMapDisplay() {
                     imageUrl: org.photos?.[0]?.medium,
                     websiteUrl: org.website || org.url,
                     dataAiHint: "animal shelter",
-                    latitude: undefined,
+                    latitude: undefined, // Petfinder orgs might not have lat/lon directly
                     longitude: undefined,
                 }));
                 combinedLocations.push(...petfinderPlaces);
@@ -194,19 +191,21 @@ export default function PetMapDisplay() {
     setDisplayedLocations(newFilteredPlaces);
 
     if (!isLoading && newFilteredPlaces.length === 0 && (searchQuery || activeFilters.size < filterOptions.length || (activeFilters.size > 0 && allFetchedLocations.length > 0) )) {
-      if (!error?.includes("Map components failed to load")) {
+      if (!error?.includes("Map components failed to load")) { // Don't overwrite map load error
         setError("No locations match your current filters or search.");
       }
     } else if (!isLoading && newFilteredPlaces.length > 0) {
-      if (!error?.includes("Map components failed to load")) {
+      if (!error?.includes("Map components failed to load")) { // Don't clear map load error
         setError(null); 
       }
     } else if (!isLoading && allFetchedLocations.length === 0 && activeFilters.size === filterOptions.length && !searchQuery){
+      // If everything is loaded, no filters applied, no search, and still no locations, clear generic errors
       if (!error?.includes("Map components failed to load")) {
         setError(null);
       }
     }
-  }, [searchQuery, activeFilters, allFetchedLocations, isLoading, error]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, activeFilters, allFetchedLocations, isLoading]);
 
 
   const handleFilterChange = (type: PlaceType, checked: boolean) => {
@@ -283,9 +282,8 @@ export default function PetMapDisplay() {
       </Card>
 
       <div className="md:col-span-2 space-y-4">
-        {/* --- CRITICAL FIX 2 & 3: The Keyed Container --- */}
         <div
-          key={mapKey} // This key forces React to create a fresh div on remount (forced by @refresh reset)
+          key={mapKey} // This key forces React to create a fresh div on remount
           className="h-[300px] md:h-[400px] bg-muted rounded-lg shadow-inner flex items-center justify-center relative overflow-hidden border"
         >
           {!canRenderMap ? (
@@ -300,8 +298,12 @@ export default function PetMapDisplay() {
               zoom={DEFAULT_ZOOM}
               style={{ height: '100%', width: '100%', borderRadius: '0.5rem', zIndex: 0 }}
               whenCreated={(mapInstance) => { 
-                console.log("[PetMapDisplay] whenCreated called for mapKey:", mapKey);
+                if (mapRef.current && mapRef.current !== mapInstance) {
+                  console.warn("[PetMapDisplay] whenCreated: mapRef.current already exists and is different. Attempting cleanup of old ref.");
+                  mapRef.current.remove();
+                }
                 mapRef.current = mapInstance; 
+                console.log("[PetMapDisplay] Map instance created/updated for mapKey:", mapKey);
               }}
               scrollWheelZoom={true}
             >
