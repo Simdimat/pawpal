@@ -1,10 +1,11 @@
 
+// @refresh reset
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import type LType from 'leaflet'; 
+import type LType from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { configureLeafletDefaultIcon } from '@/lib/leaflet-default-icon'; 
+import { configureLeafletDefaultIcon } from '@/lib/leaflet-default-icon';
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Filter, Search, AlertTriangle, Loader2, ExternalLink, Eye, ChevronDown, MapIcon } from "lucide-react";
+import { Filter, Search, AlertTriangle, Loader2, ExternalLink, Eye, ChevronDown } from "lucide-react";
 import Image from "next/image";
 import type { YelpBusiness } from '@/services/yelp';
 import type { PetfinderOrganization } from '@/services/petfinder';
@@ -24,7 +25,7 @@ const DynamicPopup = dynamic(() => import('react-leaflet').then(mod => mod.Popup
 
 type PlaceType = 'Park' | 'Beach' | 'Vet' | 'Restaurant' | 'Shelter';
 
-interface BasePlace {
+interface Place extends Partial<YelpBusiness>, Partial<PetfinderOrganization> {
   id: string;
   name: string;
   type: PlaceType;
@@ -35,8 +36,6 @@ interface BasePlace {
   latitude?: number;
   longitude?: number;
 }
-
-interface Place extends BasePlace, Partial<YelpBusiness>, Partial<PetfinderOrganization> {}
 
 const filterOptions: { id: string; label: string; type: PlaceType; yelpCategory?: string; petfinderType?: boolean }[] = [
   { id: 'parks', label: 'Dog Parks', type: 'Park', yelpCategory: 'dogparks' },
@@ -49,6 +48,14 @@ const filterOptions: { id: string; label: string; type: PlaceType; yelpCategory?
 const SAN_DIEGO_COORDS: [number, number] = [32.7157, -117.1611];
 const DEFAULT_ZOOM = 11;
 
+const MapLoader = ({ message, details }: { message: string, details?: string }) => (
+  <div className="flex flex-col items-center justify-center text-center p-4 h-full">
+    <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+    <p className="text-lg font-semibold text-foreground">{message}</p>
+    {details && <p className="text-sm text-muted-foreground mt-1">{details}</p>}
+  </div>
+);
+
 export default function PetMapDisplay() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilters, setActiveFilters] = useState<Set<PlaceType>>(
@@ -60,28 +67,46 @@ export default function PetMapDisplay() {
   const [error, setError] = useState<string | null>(null);
 
   const [clientMounted, setClientMounted] = useState(false);
-  const [leafletLib, setLeafletLib] = useState<typeof LType | null>(null);
-  const [mapIconsConfigured, setMapIconsConfigured] = useState(false);
-  
-  const mapRef = useRef<LType.Map | null>(null); 
+  const [mapLibraryLoaded, setMapLibraryLoaded] = useState(false);
+  const [mapKey, setMapKey] = useState(() => `map-${Date.now()}-${Math.random()}`);
+
+  const mapRef = useRef<LType.Map | null>(null);
   const markerRefs = useRef(new Map<string, LType.Marker>());
 
+  // Effect for map cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      if (mapRef.current) {
+        console.log("[PetMapDisplay] Unmounting. Cleaning up Leaflet map instance:", mapRef.current);
+        const mapInstance = mapRef.current;
+        mapRef.current = null; // Clear ref immediately
+        mapInstance.off();
+        mapInstance.remove();
+        const container = mapInstance.getContainer();
+        if (container && (container as any)._leaflet_id) {
+          delete (container as any)._leaflet_id;
+          console.log("[PetMapDisplay] Cleared _leaflet_id from container.");
+        }
+      }
+    };
+  }, []); // Empty dependency array ensures this runs only on unmount
+
+  // Effect for client-side detection and Leaflet library loading
   useEffect(() => {
     setClientMounted(true);
     if (typeof window !== 'undefined') {
       import('leaflet').then(L_instance => {
-        setLeafletLib(L_instance);
-        configureLeafletDefaultIcon(L_instance); 
-        setMapIconsConfigured(true);
+        configureLeafletDefaultIcon(L_instance);
+        setMapLibraryLoaded(true);
+        console.log("[PetMapDisplay] Leaflet library loaded and icons configured.");
       }).catch(err => {
-        console.error("Failed to load Leaflet library:", err);
+        console.error("[PetMapDisplay] Failed to load Leaflet library:", err);
         setError("Map components failed to load. Map functionality will be disabled.");
-        setLeafletLib(null); 
-        setMapIconsConfigured(false);
+        setMapLibraryLoaded(false);
       });
     }
   }, []);
-  
+
   useEffect(() => {
     const fetchInitialData = async () => {
       setIsLoading(true);
@@ -112,7 +137,7 @@ export default function PetMapDisplay() {
                 }));
                 combinedLocations.push(...yelpPlaces);
             } else {
-                 console.warn(`Failed to fetch ${type} from Yelp: ${yelpResponse.statusText}`);
+                 console.warn(`[PetMapDisplay] Failed to fetch ${type} from Yelp: ${yelpResponse.statusText}`);
             }
         }
 
@@ -129,21 +154,20 @@ export default function PetMapDisplay() {
                     imageUrl: org.photos?.[0]?.medium,
                     websiteUrl: org.website || org.url,
                     dataAiHint: "animal shelter",
-                    latitude: undefined, // Petfinder orgs often don't have lat/lon directly
+                    latitude: undefined,
                     longitude: undefined,
                 }));
                 combinedLocations.push(...petfinderPlaces);
             } else {
-                console.warn(`Failed to fetch shelters from Petfinder: ${petfinderResponse.statusText}`);
+                console.warn(`[PetMapDisplay] Failed to fetch shelters from Petfinder: ${petfinderResponse.statusText}`);
             }
         }
         
-        // Filter out locations without valid lat/lon for map display
         const uniqueLocations = Array.from(new Map(combinedLocations.map(item => [item.id, item])).values())
                                   .filter(loc => typeof loc.latitude === 'number' && typeof loc.longitude === 'number'); 
         setAllFetchedLocations(uniqueLocations);
       } catch (e: any) {
-        console.error("Error fetching initial map locations:", e);
+        console.error("[PetMapDisplay] Error fetching initial map locations:", e);
         setError("Failed to load location data. Please try again later.");
       } finally {
         setIsLoading(false);
@@ -175,8 +199,7 @@ export default function PetMapDisplay() {
         setError(null);
       }
     }
-
-  }, [searchQuery, activeFilters, allFetchedLocations, isLoading, error]);
+  }, [searchQuery, activeFilters, allFetchedLocations, isLoading, error]); // Removed mapKey from dependencies here
 
   const handleFilterChange = (type: PlaceType, checked: boolean) => {
     setActiveFilters(prev => {
@@ -192,6 +215,7 @@ export default function PetMapDisplay() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Search is applied reactively by the useEffect above
   };
 
   const flyToLocation = (lat?: number, lon?: number, zoomLevel: number = 15) => {
@@ -202,12 +226,12 @@ export default function PetMapDisplay() {
 
   const openPopupForLocation = (locationId: string) => {
     const marker = markerRefs.current.get(locationId);
-    if (marker) {
+    if (marker && mapRef.current) { // Ensure map instance exists for popup
       marker.openPopup();
     }
   };
 
-  const canRenderMap = clientMounted && leafletLib && mapIconsConfigured;
+  const canRenderMap = clientMounted && mapLibraryLoaded;
   const showScrollIndicator = !isLoading && !error && displayedLocations.length > 2;
 
   return (
@@ -251,24 +275,31 @@ export default function PetMapDisplay() {
       </Card>
 
       <div className="md:col-span-2 space-y-4">
-        <div className="h-[300px] md:h-[400px] bg-muted rounded-lg shadow-inner flex items-center justify-center relative overflow-hidden border">
+        <div
+          key={mapKey} // CRITICAL FIX: Unique key for the map container div
+          className="h-[300px] md:h-[400px] bg-muted rounded-lg shadow-inner flex items-center justify-center relative overflow-hidden border"
+        >
           {!canRenderMap ? (
-            <div className="flex flex-col items-center justify-center text-center p-4">
-              <Loader2 className="h-12 w-12 text-primary mb-3 animate-spin" />
-              <p className="text-lg font-semibold text-foreground">Loading Map Data...</p>
-              <p className="text-sm text-foreground/80">
-                Please wait while we prepare map components.
-              </p>
-               {!clientMounted && <p className="text-xs text-muted-foreground mt-1">Initializing client...</p>}
-               {clientMounted && !leafletLib && <p className="text-xs text-muted-foreground mt-1">Loading map library...</p>}
-               {clientMounted && leafletLib && !mapIconsConfigured && <p className="text-xs text-muted-foreground mt-1">Configuring map icons...</p>}
-            </div>
+            <MapLoader
+              message={clientMounted ? "Loading map library..." : "Initializing client components..."}
+              details={error ? error : undefined}
+            />
           ) : (
             <DynamicMapContainer
+              id={`map-instance-${mapKey}`} // Use mapKey to ensure unique DOM ID for Leaflet
               center={SAN_DIEGO_COORDS}
               zoom={DEFAULT_ZOOM}
               style={{ height: '100%', width: '100%', borderRadius: '0.5rem', zIndex: 0 }}
-              whenCreated={(mapInstance) => { mapRef.current = mapInstance; }}
+              whenCreated={(mapInstance) => {
+                if (mapRef.current && mapRef.current !== mapInstance) {
+                  // If ref already points to a different map, clean up old one first (defensive)
+                  console.warn("[PetMapDisplay] whenCreated: mapRef already existed. Cleaning up old instance.");
+                  mapRef.current.off();
+                  mapRef.current.remove();
+                }
+                mapRef.current = mapInstance;
+                console.log("[PetMapDisplay] Map instance created and ref set:", mapInstance);
+              }}
               scrollWheelZoom={true}
             >
               <DynamicTileLayer
@@ -284,7 +315,7 @@ export default function PetMapDisplay() {
                       ref={(el) => { if (el) markerRefs.current.set(loc.id, el); }}
                     >
                       <DynamicPopup>
-                        <div className="text-sm w-48"> {/* Added w-48 for consistent popup width */}
+                        <div className="text-sm w-48">
                           <h3 className="font-semibold text-md mb-1 truncate" title={loc.name}>{loc.name}</h3>
                           {loc.address && <p className="text-xs text-muted-foreground mb-1 truncate" title={loc.address}>{loc.address}</p>}
                           {loc.websiteUrl && (
@@ -317,7 +348,6 @@ export default function PetMapDisplay() {
             {error && !error.includes("Map components failed to load") && <div className="mt-4 text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
             {error && error.includes("Map components failed to load") && <div className="mt-4 text-sm text-orange-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
 
-
             {!isLoading && !error && displayedLocations.length > 0 ? (
               <>
                 <ScrollArea className="h-[200px] md:h-[calc(100vh-650px)] min-h-[200px]"> 
@@ -331,7 +361,7 @@ export default function PetMapDisplay() {
                           height={150}
                           className="w-full h-24 object-cover rounded-md mb-2"
                           data-ai-hint={loc.dataAiHint || loc.type.toLowerCase()}
-                          unoptimized={loc.imageUrl?.includes('cloudfront.net') || loc.imageUrl?.includes('yelpcdn.com')} // Added yelpcdn
+                          unoptimized={loc.imageUrl?.includes('cloudfront.net') || loc.imageUrl?.includes('yelpcdn.com')}
                         />
                         <h4 className="font-semibold text-md text-primary">{loc.name}</h4>
                         <p className="text-sm text-muted-foreground">{loc.type} - {loc.address}</p>
@@ -376,6 +406,3 @@ export default function PetMapDisplay() {
     </div>
   );
 }
-    
-
-    
