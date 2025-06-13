@@ -1,10 +1,13 @@
+
 // @refresh reset
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import maplibregl, { LngLatLike } from 'maplibre-gl';
-import type { MapRef, ViewStateChangeEvent } from 'react-map-gl';
+// Explicitly import types from the /maplibre path
+import type { MapRef as MapLibreMapRef, ViewStateChangeEvent as MapLibreViewStateChangeEvent } from 'react-map-gl/maplibre';
+
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,10 +20,15 @@ import Image from "next/image";
 import type { YelpBusiness } from '@/services/yelp';
 import type { PetfinderOrganization } from '@/services/petfinder';
 
-// --- Dynamic Imports for react-map-gl components ---
-const MapGL = dynamic(() => import('react-map-gl').then(mod => mod.Map), { ssr: false, loading: () => <MapLoader message="Loading map library..." /> });
-const MarkerGL = dynamic(() => import('react-map-gl').then(mod => mod.Marker), { ssr: false });
-const PopupGL = dynamic(() => import('react-map-gl').then(mod => mod.Popup), { ssr: false });
+// --- Dynamic Imports for react-map-gl components from MAPLIBRE path ---
+const MapGL = dynamic(() => import('react-map-gl/maplibre').then(mod => mod.Map), { ssr: false, loading: () => <MapLoader message="Loading map library..." /> });
+const MarkerGL = dynamic(() => import('react-map-gl/maplibre').then(mod => mod.Marker), { ssr: false });
+const PopupGL = dynamic(() => import('react-map-gl/maplibre').then(mod => mod.Popup), { ssr: false });
+
+// Use the aliased types throughout the component for clarity
+type MapRef = MapLibreMapRef;
+type ViewStateChangeEvent = MapLibreViewStateChangeEvent;
+
 
 // --- Type Definitions and Constants ---
 type PlaceType = 'Park' | 'Beach' | 'Vet' | 'Restaurant' | 'Shelter';
@@ -51,7 +59,7 @@ const SAN_DIEGO_INITIAL_VIEW_STATE = {
   bearing: 0,
 };
 
-const MAP_STYLE = "https://demotiles.maplibre.org/style.json"; // A free, public style from MapLibre
+const MAP_STYLE = "https://demotiles.maplibre.org/style.json";
 
 // --- Helper Component for Loading State ---
 const MapLoader = ({ message, details }: { message: string, details?: string }) => (
@@ -74,26 +82,27 @@ export default function PetMapDisplay() {
   const [selectedLocationPopup, setSelectedLocationPopup] = useState<Place | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [clientMounted, setClientMounted] = useState(false);
-  const [mapKey, setMapKey] = useState(() => `map-${Date.now()}-${Math.random()}`);
+  const [mapKey, setMapKey] = useState(() => `map-${Date.now()}-${Math.random()}`); // Keep unique key
 
   const mapRef = useRef<MapRef | null>(null);
 
   useEffect(() => {
     setClientMounted(true);
-  }, []);
-  
-  useEffect(() => {
-    // This is primarily to ensure that if HMR causes issues, we have a way to force a fresh map.
-    // The main cleanup for map instances with maplibre-gl is usually handled by react-map-gl itself
-    // when the <MapGL> component unmounts.
+     // Cleanup function for maplibre-gl map instance
     return () => {
-      // No explicit map.remove() is typically needed with react-map-gl like it is with raw Leaflet.
-      // react-map-gl handles its lifecycle.
-      console.log("PetMapDisplay is unmounting or mapKey changed.");
+      if (mapRef.current && typeof (mapRef.current as any).getMap === 'function') {
+        // mapRef.current is a react-map-gl MapRef, which has a getMap() method that returns the maplibre.Map instance.
+        const maplibreMap = (mapRef.current as any).getMap();
+        if (maplibreMap && typeof maplibreMap.remove === 'function') {
+          console.log("PetMapDisplay is unmounting. Cleaning up MapLibre GL map instance.");
+          maplibreMap.remove();
+        }
+      }
+      mapRef.current = null; // Clear the ref
     };
-  }, [mapKey]);
+  }, []); // Empty dependency: runs on mount and unmount
 
-
+  
   // Effect for fetching initial location data
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -141,7 +150,7 @@ export default function PetMapDisplay() {
                     address: `${org.address?.address1 || ''}, ${org.address?.city || ''}, ${org.address?.state || ''}`.replace(/^,|,$/g, '').trim(),
                     imageUrl: org.photos?.[0]?.medium,
                     websiteUrl: org.website || org.url,
-                    dataAiHint: "animal shelter",
+                    dataAiHint: "animal shelter building",
                     latitude: undefined, 
                     longitude: undefined,
                 }));
@@ -205,14 +214,13 @@ export default function PetMapDisplay() {
   const handleMarkerClick = (loc: Place) => {
     setSelectedLocationPopup(loc);
     if (loc.latitude && loc.longitude) {
-        // Optional: slightly adjust center if popup is too large or marker is at edge
         flyToLocation(loc.latitude, loc.longitude, viewState.zoom < 13 ? 13 : viewState.zoom);
     }
   };
 
   const handleMapLoad = useCallback(() => {
     setMapReady(true);
-    console.log("MapLibre map loaded.");
+    console.log("MapLibre map loaded via react-map-gl.");
   }, []);
 
   const onMapMove = useCallback((evt: ViewStateChangeEvent) => {
@@ -270,63 +278,67 @@ export default function PetMapDisplay() {
            key={mapKey} // Force re-creation of this div and thus the map if key changes
            className="h-[400px] md:h-[400px] bg-muted rounded-lg shadow-inner flex items-center justify-center relative overflow-hidden border"
         >
-          <MapGL
-            ref={mapRef}
-            mapLib={maplibregl}
-            initialViewState={SAN_DIEGO_INITIAL_VIEW_STATE}
-            style={{width: '100%', height: '100%', borderRadius: '0.5rem'}}
-            mapStyle={MAP_STYLE}
-            onLoad={handleMapLoad}
-            onMove={onMapMove}
-            // Other props like scrollZoom, dragPan, etc. are true by default
-          >
-            {mapReady && displayedLocations.map(loc => {
-              if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
-                return (
-                  <MarkerGL
-                    key={loc.id}
-                    longitude={loc.longitude}
-                    latitude={loc.latitude}
-                    onClick={(e) => {
-                      e.originalEvent.stopPropagation(); // Important for react-map-gl
-                      handleMarkerClick(loc);
-                    }}
-                  >
-                    <Pin className="w-6 h-6 text-destructive fill-destructive/70 cursor-pointer" />
-                  </MarkerGL>
-                );
-              }
-              return null;
-            })}
-
-            {selectedLocationPopup && typeof selectedLocationPopup.latitude === 'number' && typeof selectedLocationPopup.longitude === 'number' && (
-              <PopupGL
-                longitude={selectedLocationPopup.longitude}
-                latitude={selectedLocationPopup.latitude}
-                onClose={() => setSelectedLocationPopup(null)}
-                closeButton={true}
-                closeOnClick={false} // Keep popup open when map is clicked, only close via its own button
-                anchor="bottom"
-                offset={25} // Adjust as needed for Pin icon
-              >
-                <div className="text-sm w-48 p-1">
-                  <h3 className="font-semibold text-md mb-1 truncate" title={selectedLocationPopup.name}>{selectedLocationPopup.name}</h3>
-                  {selectedLocationPopup.address && <p className="text-xs text-muted-foreground mb-1 truncate" title={selectedLocationPopup.address}>{selectedLocationPopup.address}</p>}
-                  {selectedLocationPopup.websiteUrl && (
-                    <a
-                      href={selectedLocationPopup.websiteUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline text-xs flex items-center truncate"
+          {clientMounted ? ( // Only attempt to render MapGL if clientMounted is true
+            <MapGL
+              ref={mapRef}
+              mapLib={maplibregl} // Pass the maplibre-gl instance
+              initialViewState={SAN_DIEGO_INITIAL_VIEW_STATE}
+              style={{width: '100%', height: '100%', borderRadius: '0.5rem'}}
+              mapStyle={MAP_STYLE}
+              onLoad={handleMapLoad}
+              onMove={onMapMove}
+            >
+              {mapReady && displayedLocations.map(loc => {
+                if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+                  return (
+                    <MarkerGL
+                      key={loc.id}
+                      longitude={loc.longitude}
+                      latitude={loc.latitude}
+                      onClick={(e) => {
+                        // For react-map-gl v7, direct event might not have originalEvent.
+                        // The click on marker itself is usually enough.
+                        e.originalEvent?.stopPropagation(); 
+                        handleMarkerClick(loc);
+                      }}
                     >
-                      Visit Website <ExternalLink className="ml-1 h-3 w-3 flex-shrink-0" />
-                    </a>
-                  )}
-                </div>
-              </PopupGL>
-            )}
-          </MapGL>
-          {!mapReady && clientMounted && <MapLoader message="Loading map..." />}
+                      <Pin className="w-6 h-6 text-destructive fill-destructive/70 cursor-pointer" />
+                    </MarkerGL>
+                  );
+                }
+                return null;
+              })}
+
+              {selectedLocationPopup && typeof selectedLocationPopup.latitude === 'number' && typeof selectedLocationPopup.longitude === 'number' && (
+                <PopupGL
+                  longitude={selectedLocationPopup.longitude}
+                  latitude={selectedLocationPopup.latitude}
+                  onClose={() => setSelectedLocationPopup(null)}
+                  closeButton={true}
+                  closeOnClick={false}
+                  anchor="bottom"
+                  offset={25} 
+                >
+                  <div className="text-sm w-48 p-1">
+                    <h3 className="font-semibold text-md mb-1 truncate" title={selectedLocationPopup.name}>{selectedLocationPopup.name}</h3>
+                    {selectedLocationPopup.address && <p className="text-xs text-muted-foreground mb-1 truncate" title={selectedLocationPopup.address}>{selectedLocationPopup.address}</p>}
+                    {selectedLocationPopup.websiteUrl && (
+                      <a
+                        href={selectedLocationPopup.websiteUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline text-xs flex items-center truncate"
+                      >
+                        Visit Website <ExternalLink className="ml-1 h-3 w-3 flex-shrink-0" />
+                      </a>
+                    )}
+                  </div>
+                </PopupGL>
+              )}
+            </MapGL>
+          ) : (
+            <MapLoader message="Initializing map components..." />
+          )}
         </div>
 
         <Card className="shadow-md">
@@ -368,7 +380,6 @@ export default function PetMapDisplay() {
                           onClick={() => {
                             if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
                               flyToLocation(loc.latitude, loc.longitude);
-                              // Delay showing popup slightly after flying to ensure map is centered
                               setTimeout(() => setSelectedLocationPopup(loc), 50);
                             }
                           }}
@@ -396,3 +407,5 @@ export default function PetMapDisplay() {
     </div>
   );
 }
+
+    
