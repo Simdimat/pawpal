@@ -56,10 +56,10 @@ const nextConfig: NextConfig = {
     // Aliasing mapbox-gl to maplibre-gl
     config.resolve.alias = {
       ...config.resolve.alias,
-      // Make the alias more explicit using path.resolve
-      'mapbox-gl': path.resolve(__dirname, 'node_modules/maplibre-gl'),
+      // Use the direct module name for the alias
+      'mapbox-gl': 'maplibre-gl',
     };
-    console.log("Webpack config modified with mapbox-gl alias to maplibre-gl (path resolved)."); // For server-side logging confirmation
+    console.log("Webpack config modified with mapbox-gl alias to 'maplibre-gl'.");
     return config;
   },
 };
