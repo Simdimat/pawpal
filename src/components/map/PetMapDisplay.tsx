@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import maplibregl, { LngLatLike } from 'maplibre-gl';
+import maplibregl from 'maplibre-gl';
 // Explicitly import types from the /maplibre path
 import type { MapRef as MapLibreMapRef, ViewStateChangeEvent as MapLibreViewStateChangeEvent } from 'react-map-gl/maplibre';
 
@@ -82,25 +82,23 @@ export default function PetMapDisplay() {
   const [selectedLocationPopup, setSelectedLocationPopup] = useState<Place | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [clientMounted, setClientMounted] = useState(false);
-  const [mapKey, setMapKey] = useState(() => `map-${Date.now()}-${Math.random()}`); // Keep unique key
+  const [mapKey, setMapKey] = useState(() => `map-${Date.now()}-${Math.random()}`); 
 
   const mapRef = useRef<MapRef | null>(null);
 
   useEffect(() => {
     setClientMounted(true);
-     // Cleanup function for maplibre-gl map instance
     return () => {
       if (mapRef.current && typeof (mapRef.current as any).getMap === 'function') {
-        // mapRef.current is a react-map-gl MapRef, which has a getMap() method that returns the maplibre.Map instance.
         const maplibreMap = (mapRef.current as any).getMap();
         if (maplibreMap && typeof maplibreMap.remove === 'function') {
           console.log("PetMapDisplay is unmounting. Cleaning up MapLibre GL map instance.");
           maplibreMap.remove();
         }
       }
-      mapRef.current = null; // Clear the ref
+      mapRef.current = null; 
     };
-  }, []); // Empty dependency: runs on mount and unmount
+  }, []); 
 
   
   // Effect for fetching initial location data
@@ -207,7 +205,7 @@ export default function PetMapDisplay() {
 
   const flyToLocation = useCallback((lat?: number, lon?: number, zoomLevel: number = 14) => {
     if (mapRef.current && typeof lat === 'number' && typeof lon === 'number') {
-      mapRef.current.flyTo({ center: [lon, lat] as LngLatLike, zoom: zoomLevel, duration: 1500 });
+      mapRef.current.flyTo({ center: [lon, lat] as maplibregl.LngLatLike, zoom: zoomLevel, duration: 1500 });
     }
   }, []);
 
@@ -275,13 +273,13 @@ export default function PetMapDisplay() {
 
       <div className="md:col-span-2 space-y-4">
         <div
-           key={mapKey} // Force re-creation of this div and thus the map if key changes
+           key={mapKey} 
            className="h-[400px] md:h-[400px] bg-muted rounded-lg shadow-inner flex items-center justify-center relative overflow-hidden border"
         >
-          {clientMounted ? ( // Only attempt to render MapGL if clientMounted is true
+          {clientMounted ? ( 
             <MapGL
               ref={mapRef}
-              mapLib={maplibregl} // Pass the maplibre-gl instance
+              mapLib={maplibregl} 
               initialViewState={SAN_DIEGO_INITIAL_VIEW_STATE}
               style={{width: '100%', height: '100%', borderRadius: '0.5rem'}}
               mapStyle={MAP_STYLE}
@@ -296,8 +294,6 @@ export default function PetMapDisplay() {
                       longitude={loc.longitude}
                       latitude={loc.latitude}
                       onClick={(e) => {
-                        // For react-map-gl v7, direct event might not have originalEvent.
-                        // The click on marker itself is usually enough.
                         e.originalEvent?.stopPropagation(); 
                         handleMarkerClick(loc);
                       }}
@@ -407,5 +403,3 @@ export default function PetMapDisplay() {
     </div>
   );
 }
-
-    

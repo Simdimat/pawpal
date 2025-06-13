@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
       },
       { // For Yelp images
         protocol: 'https',
-        hostname: 's3-media0.fl.yelpcdn.com', // Added this line
+        hostname: 's3-media0.fl.yelpcdn.com',
       },
       {
         protocol: 'https',
@@ -50,6 +50,14 @@ const nextConfig: NextConfig = {
         hostname: 'photos.petfinder.com',
       }
     ],
+  },
+  webpack: (config, { isServer }) => {
+    // Aliasing mapbox-gl to maplibre-gl
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'mapbox-gl': 'maplibre-gl',
+    };
+    return config;
   },
 };
 
