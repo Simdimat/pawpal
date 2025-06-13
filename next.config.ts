@@ -1,5 +1,6 @@
 
 import type {NextConfig} from 'next';
+import path from 'path'; // Import the 'path' module
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -55,8 +56,10 @@ const nextConfig: NextConfig = {
     // Aliasing mapbox-gl to maplibre-gl
     config.resolve.alias = {
       ...config.resolve.alias,
-      'mapbox-gl': 'maplibre-gl',
+      // Make the alias more explicit using path.resolve
+      'mapbox-gl': path.resolve(__dirname, 'node_modules/maplibre-gl'),
     };
+    console.log("Webpack config modified with mapbox-gl alias to maplibre-gl (path resolved)."); // For server-side logging confirmation
     return config;
   },
 };
