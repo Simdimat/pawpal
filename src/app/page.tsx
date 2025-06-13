@@ -19,19 +19,11 @@ import { cn } from '@/lib/utils';
 export default function HomePage() {
   const [isChatOpen, setIsChatOpen] = useState(true);
 
-  // This offset positions the sticky chat column 2rem below the top of its containing block
-  // (the main content area which already has its own padding from layout.tsx).
-  const stickyChatTopOffset = "2rem"; // 32px
-
-  // Corrected Max height for sticky chat column:
-  // ViewportHeight - EffectiveTopOffsetFromViewport - SpaceConsumedByFooterAndBottomPadding
-  // EffectiveTopOffsetFromViewport = HeaderHeight (68px) + LayoutMainDivPaddingTop (32px) + stickyChatTopOffset (32px) = 132px
-  // SpaceConsumedByFooterAndBottomPadding = FooterHeight (60px) + LayoutMainDivPaddingBottom (32px) = 92px
-  // chatMaxHeight = 100vh - 132px - 92px = 100vh - 224px
-  const chatMaxHeight = `calc(100vh - 224px)`;
+  // Define header height (approximate, adjust if needed)
+  const headerHeight = "4rem"; // e.g., 64px
 
   return (
-    <div className="flex flex-col md:flex-row w-full gap-x-6">
+    <div className="flex flex-col md:flex-row w-full gap-x-6 relative"> {/* Added relative positioning */}
       {/* Left Column - Main Content */}
       <div className="w-full md:w-3/4">
         {/* Main content will naturally scroll if taller than viewport */}
@@ -128,7 +120,7 @@ export default function HomePage() {
       {/* Right Column - Chatbot */}
       <div
         className="w-full md:w-1/4 md:sticky self-start flex flex-col"
-        style={{ top: stickyChatTopOffset, maxHeight: chatMaxHeight }}
+        style={{ top: headerHeight, height: `calc(100vh - ${headerHeight})` }}
       >
         {isChatOpen ? (
           <Card className="w-full flex-1 flex flex-col shadow-xl border border-border rounded-lg overflow-hidden min-h-0">
