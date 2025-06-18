@@ -369,85 +369,85 @@ const ChatInterface = () => {
   return (
     <div className="flex flex-col h-full w-full min-h-0">
       <ScrollArea className="flex-grow w-full p-4 min-h-0" ref={scrollAreaRef}>
-        <div className="space-y-4">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={cn(
-                'flex items-end gap-2',
-                message.sender === 'user' ? 'justify-end' : 'justify-start'
-              )}
-            >
-              {message.sender === 'ai' && (
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src="https://placehold.co/40x40.png" alt="PawPal AI" data-ai-hint="robot dog" />
-                  <AvatarFallback><Bot size={18}/></AvatarFallback>
-                </Avatar>
-              )}
-               {message.sender === 'context-info' && (
-                <Avatar className="h-8 w-8 opacity-70">
-                  <AvatarFallback><MessageSquareText size={18} className="text-blue-500"/></AvatarFallback>
-                </Avatar>
-              )}
+        {messages.length === 0 && showSuggestions && !isLoading && !isFetchingContext ? (
+          <div> {/* Wrapper for suggestions */}
+            <p className="text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
+              <HelpCircle size={16} />
+              Not sure what to ask? Try one of these:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {suggestedQuestionsList.map((q, i) => (
+                <Button
+                  key={i}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-auto py-1.5 px-3 bg-card hover:bg-secondary whitespace-normal text-left"
+                  onClick={() => handleSuggestionClick(q)}
+                >
+                  {q}
+                </Button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4"> {/* Existing messages map */}
+            {messages.map((message) => (
               <div
+                key={message.id}
                 className={cn(
-                  'max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap',
-                  message.sender === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : message.sender === 'ai'
-                    ? 'bg-card text-card-foreground border'
-                    : 'bg-blue-50 border border-blue-200 text-blue-700 text-xs italic'
+                  'flex items-end gap-2',
+                  message.sender === 'user' ? 'justify-end' : 'justify-start'
                 )}
               >
-                {message.text || (message.sender === 'ai' && isLoading && messages.length > 0 && messages[messages.length -1]?.id === message.id && <Loader2 className="h-4 w-4 animate-spin" />)}
-                 <p className="text-xs opacity-70 mt-1 text-right">
-                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              </div>
-              {message.sender === 'user' && (
-                 <Avatar className="h-8 w-8">
-                  <AvatarImage src="https://placehold.co/40x40.png" alt="User" data-ai-hint="person avatar"/>
-                  <AvatarFallback><User size={18}/></AvatarFallback>
-                </Avatar>
-              )}
-            </div>
-          ))}
-           { (isLoading || isFetchingContext) && messages[messages.length-1]?.sender === 'user' && !messages.some(m => m.sender === 'context-info' && m.text.includes('Checking for relevant')) && (
-             <div className="flex items-end gap-2 justify-start">
-                <Avatar className="h-8 w-8">
+                {message.sender === 'ai' && (
+                  <Avatar className="h-8 w-8">
                     <AvatarImage src="https://placehold.co/40x40.png" alt="PawPal AI" data-ai-hint="robot dog" />
                     <AvatarFallback><Bot size={18}/></AvatarFallback>
-                </Avatar>
-                <div className="max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap bg-card text-card-foreground border">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {isFetchingContext && <span className="ml-2 text-xs italic">Thinking...</span>}
+                  </Avatar>
+                )}
+                 {message.sender === 'context-info' && (
+                  <Avatar className="h-8 w-8 opacity-70">
+                    <AvatarFallback><MessageSquareText size={18} className="text-blue-500"/></AvatarFallback>
+                  </Avatar>
+                )}
+                <div
+                  className={cn(
+                    'max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap',
+                    message.sender === 'user'
+                      ? 'bg-primary text-primary-foreground'
+                      : message.sender === 'ai'
+                      ? 'bg-card text-card-foreground border'
+                      : 'bg-blue-50 border border-blue-200 text-blue-700 text-xs italic'
+                  )}
+                >
+                  {message.text || (message.sender === 'ai' && isLoading && messages.length > 0 && messages[messages.length -1]?.id === message.id && <Loader2 className="h-4 w-4 animate-spin" />)}
+                   <p className="text-xs opacity-70 mt-1 text-right">
+                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
                 </div>
-             </div>
-           )}
-        </div>
-      </ScrollArea>
-
-      {showSuggestions && messages.length === 0 && !isLoading && !isFetchingContext && (
-        <ScrollArea className="p-4 border-t bg-background/50 max-h-48" > {/* Added max-h-48 and ScrollArea here */}
-          <p className="text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
-            <HelpCircle size={16} />
-            Not sure what to ask? Try one of these:
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {suggestedQuestionsList.map((q, i) => (
-              <Button
-                key={i}
-                variant="outline"
-                size="sm"
-                className="text-xs h-auto py-1.5 px-3 bg-card hover:bg-secondary whitespace-normal text-left"
-                onClick={() => handleSuggestionClick(q)}
-              >
-                {q}
-              </Button>
+                {message.sender === 'user' && (
+                   <Avatar className="h-8 w-8">
+                    <AvatarImage src="https://placehold.co/40x40.png" alt="User" data-ai-hint="person avatar"/>
+                    <AvatarFallback><User size={18}/></AvatarFallback>
+                  </Avatar>
+                )}
+              </div>
             ))}
           </div>
-        </ScrollArea>
-      )}
+        )}
+        { (isLoading || isFetchingContext) && messages[messages.length-1]?.sender === 'user' && !messages.some(m => m.sender === 'context-info' && m.text.includes('Checking for relevant')) && (
+           <div className="flex items-end gap-2 justify-start mt-4"> {/* Added mt-4 for spacing if spinner appears after user message */}
+              <Avatar className="h-8 w-8">
+                  <AvatarImage src="https://placehold.co/40x40.png" alt="PawPal AI" data-ai-hint="robot dog" />
+                  <AvatarFallback><Bot size={18}/></AvatarFallback>
+              </Avatar>
+              <div className="max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap bg-card text-card-foreground border">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {isFetchingContext && <span className="ml-2 text-xs italic">Thinking...</span>}
+              </div>
+           </div>
+         )}
+      </ScrollArea>
 
       <form onSubmit={handleFormSubmit} className="p-4 flex items-center gap-2 border-t bg-background">
         <Input

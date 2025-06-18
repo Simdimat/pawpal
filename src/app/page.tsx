@@ -20,12 +20,13 @@ export default function HomePage() {
   const [isChatOpen, setIsChatOpen] = useState(true);
 
   // Define header height (approximate, adjust if needed)
-  const headerHeight = "4rem"; // e.g., 64px
+  const headerHeight = "4.5rem"; // Adjusted for better clearance
 
   return (
     <div className="flex flex-col md:flex-row w-full gap-x-6 relative"> {/* Added relative positioning */}
       {/* Left Column - Main Content */}
-      <div className="w-full md:w-3/4">
+      {/* Added pt-8 here for top spacing, consistent with original py-8 */}
+      <div className="w-full md:w-3/4 pt-8">
         {/* Main content will naturally scroll if taller than viewport */}
         <main className="w-full space-y-12">
           <section className="w-full py-12 md:py-20 lg:py-24 bg-gradient-to-br from-primary/10 via-background to-accent/10 rounded-xl shadow-lg">
