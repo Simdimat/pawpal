@@ -44,18 +44,16 @@ async function fetchGoogleSearchResults(userQuestion: string): Promise<GoogleOrg
     if (err.response?.data) {
         console.error("Scrapingdog error details:", JSON.stringify(err.response.data, null, 2));
     }
-    return [];
+    // Propagate a more specific error message if possible
+    const detail = err.response?.data?.message || err.message;
+    throw new Error(`Scrapingdog API error: ${detail}`);
   }
 }
 
 function extractPostIdFromUrl(url: string): string | null {
-  // Regex to capture the post ID from various Reddit URL formats
-  // Example: /r/subreddit/comments/POST_ID/title_slug/
-  // Example: /r/subreddit/comments/POST_ID/
-  // Example: /comments/POST_ID/
   const match = url.match(/\/comments\/([a-zA-Z0-9]+)(?:\/|$)/);
   if (match && match[1]) {
-    return match[1]; // This is the base ID, e.g., "xxxxxx"
+    return match[1];
   }
   console.warn(`[Experimental Reddit] Could not extract post ID from URL: ${url}`);
   return null;
@@ -79,6 +77,7 @@ export async function searchAndFetchFullRedditPosts(userQuestion: string, result
     const topResults = googleResults.slice(0, resultLimit);
     let summary = `Found these Reddit discussions based on your query "${userQuestion}":\n\n`;
     let postsProcessed = 0;
+    let firstCommentErrorDetail: string | null = null;
 
     for (const result of topResults) {
       const postIdBase = extractPostIdFromUrl(result.link);
@@ -87,7 +86,6 @@ export async function searchAndFetchFullRedditPosts(userQuestion: string, result
         continue;
       }
 
-      // Our fetchPostComments function expects the "fullname" (e.g., t3_xxxxxx)
       const postFullName = `t3_${postIdBase}`;
       console.log(`[Experimental Reddit] Fetching comments for post: ${postFullName} (Title: ${result.title})`);
 
@@ -95,7 +93,6 @@ export async function searchAndFetchFullRedditPosts(userQuestion: string, result
         const comments: RedditComment[] = await fetchPostComments(postFullName, 2); // Fetch top 2 comments
 
         summary += `Post: "${result.title}"\n`;
-        // summary += `  (Source: ${result.link})\n`; // Optional: include the link
         if (result.snippet) {
              summary += `  Snippet: ${result.snippet.substring(0,150)}...\n`;
         }
@@ -111,23 +108,30 @@ export async function searchAndFetchFullRedditPosts(userQuestion: string, result
         summary += "\n";
         postsProcessed++;
       } catch (commentError: any) {
-        console.error(`[Experimental Reddit] Error fetching comments for post ${postFullName}:`, commentError.message);
-        summary += `Post: "${result.title}"\n  Could not fetch comments for this post.\n\n`;
+        const errorDetail = commentError.response?.data?.message || commentError.response?.data?.error_description || commentError.message || "Unknown error fetching comments";
+        console.error(`[Experimental Reddit] Error fetching comments for post ${postFullName} (Title: ${result.title}):`, errorDetail);
+        if (commentError.response?.data) {
+          console.error(`[Experimental Reddit] Full comment error data for ${postFullName}:`, JSON.stringify(commentError.response.data, null, 2));
+        }
+        if (!firstCommentErrorDetail) {
+          firstCommentErrorDetail = `Failed on post "${result.title}": ${errorDetail}`;
+        }
+        summary += `Post: "${result.title}"\n  Could not fetch comments for this post (Error: ${errorDetail.substring(0, 100)}${errorDetail.length > 100 ? '...' : ''}).\n\n`;
       }
     }
 
     if (postsProcessed === 0 && topResults.length > 0) {
-        return "Found Reddit posts via Google, but encountered issues fetching their content.";
+        const baseMessage = "Found Reddit posts via Google, but encountered issues fetching their content.";
+        return firstCommentErrorDetail ? `${baseMessage} First error: ${firstCommentErrorDetail}` : baseMessage;
     }
-    if (postsProcessed === 0 && topResults.length === 0) { // Should be caught by earlier check, but safeguard
+    if (postsProcessed === 0 && topResults.length === 0) {
         return "No relevant Reddit discussions found via Google search for your query.";
     }
-
 
     return summary.trim();
 
   } catch (error: any) {
     console.error("[Experimental Reddit] Error in searchAndFetchFullRedditPosts:", error.message);
-    return "Sorry, I encountered an error trying to fetch and summarize Reddit content.";
+    return `Sorry, I encountered an error trying to fetch Reddit content: ${error.message.substring(0,150)}`;
   }
 }

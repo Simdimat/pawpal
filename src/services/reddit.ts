@@ -38,6 +38,10 @@ const getNewAccessToken = async (): Promise<string> => {
     return access_token;
   } catch (error: any) {
     console.error('[RedditService] Error getting new Reddit access token:', error.response?.data || error.message);
+    if (axios.isAxiosError(error) && error.response) {
+      console.error('[RedditService] New Token Error Response Status:', error.response.status);
+      console.error('[RedditService] New Token Error Response Data:', JSON.stringify(error.response.data, null, 2));
+    }
     throw new Error('Failed to get new Reddit access token.');
   }
 };
@@ -65,9 +69,20 @@ export async function makeAuthenticatedRedditRequest(
       },
     });
     return response.data;
-  } catch (error) {
-    console.error('[RedditService] Error making authenticated Reddit request:', error);
-    throw error;
+  } catch (error: any) {
+    if (axios.isAxiosError(error)) {
+      console.error(`[RedditService] Axios error during authenticated request to ${url}:`, error.message);
+      if (error.response) {
+        console.error('[RedditService] Error Response Status:', error.response.status);
+        console.error('[RedditService] Error Response Data:', JSON.stringify(error.response.data, null, 2));
+        // Propagate a more informative error message
+        const apiErrorMsg = error.response.data?.message || error.response.data?.error_description || error.response.data?.error || error.message;
+        throw new Error(`Reddit API Error (${error.response.status}): ${apiErrorMsg}`);
+      }
+    } else {
+      console.error(`[RedditService] Non-Axios error during authenticated request to ${url}:`, error);
+    }
+    throw error; // Re-throw the original or wrapped error
   }
 }
 
@@ -164,7 +179,8 @@ export async function searchReddit(
     console.log(`[RedditService] Reddit search for "${query}" on "${primarySubreddit || (subreddits ? subreddits.join(', ') : 'all')}" returned no data.children.`);
     return [];
   } catch (error: any) {
-    console.error(`[RedditService] Error searching Reddit for "${query}":`, error.response?.data || error.message);
+    // Error is already logged by makeAuthenticatedRedditRequest
+    console.error(`[RedditService] Search Reddit failed for query "${query}". Error: ${error.message}`);
     return [];
   }
 }
@@ -203,15 +219,12 @@ interface RedditCommentsResponse extends Array<any> {
 
 
 export async function fetchPostComments(postId: string, limit: number = 3, sort: 'confidence' | 'top' | 'new' | 'controversial' | 'old' | 'random' | 'qa' | 'live' = 'top'): Promise<RedditComment[]> {
-  // postId here is the "name" of the post, e.g., t3_xxxxxx.
-  // If you only have the ID part (xxxxxx), you'd prefix it with "t3_".
-  // The searchReddit function now returns 'name' which is the full ID.
   const postFullName = postId.startsWith('t3_') ? postId : `t3_${postId}`;
-  const url = `https://oauth.reddit.com/comments/${postFullName.substring(3)}.json`; // Endpoint uses ID without t3_ prefix
+  const url = `https://oauth.reddit.com/comments/${postFullName.substring(3)}.json`; 
   const params = new URLSearchParams({
     sort: sort,
-    limit: (limit * 2).toString(), // Fetch more to filter, e.g. for deleted comments or short ones
-    depth: '1', // Only top-level comments
+    limit: (limit * 2).toString(), 
+    depth: '1', 
   });
   const fullUrl = `${url}?${params.toString()}`;
   console.log(`[RedditService] Fetching comments for post ${postFullName} from URL: ${fullUrl}`);
@@ -226,15 +239,16 @@ export async function fetchPostComments(postId: string, limit: number = 3, sort:
       const comments: RedditComment[] = commentsData
         .filter(child => child.kind === 't1' && child.data && child.data.body && child.data.body !== '[deleted]' && child.data.body !== '[removed]')
         .map(child => child.data)
-        .slice(0, limit); // Take the top 'limit' valid comments
+        .slice(0, limit); 
 
-      console.log(`[RedditService] Processed ${comments.length} valid comments for post ${postFullName}. Sample:`, comments.slice(0,1).map(c => ({ author: c.author, body_preview: c.body.substring(0,50), score: c.score })));
+      console.log(`[RedditService] Processed ${comments.length} valid comments for post ${postFullName}.`);
       return comments;
     }
     console.log(`[RedditService] No comments found or unexpected response structure for post ${postFullName}.`);
     return [];
   } catch (error: any) {
-    console.error(`[RedditService] Error fetching comments for post ${postFullName}:`, error.response?.data || error.message);
-    return [];
+    // Error is already logged by makeAuthenticatedRedditRequest
+    console.error(`[RedditService] Fetch comments failed for post ${postFullName}. Error: ${error.message}`);
+    throw error; // Re-throw to be caught by the caller in experimental_reddit.ts
   }
 }
