@@ -6,14 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, User, Bot, Loader2, HelpCircle, MessageSquareText } from 'lucide-react';
+import { Send, User, Bot, Loader2, HelpCircle, MessageSquareText, AlertTriangleIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 interface Message {
   id: string;
   text: string;
-  sender: 'user' | 'ai' | 'context-info';
+  sender: 'user' | 'ai' | 'context-info' | 'debug-info';
   timestamp: Date;
 }
 
@@ -104,41 +104,44 @@ const ChatInterface = () => {
       "No Petfinder organizations found",
       "No relevant Petfinder shelter or rescue listings",
       "Error fetching Petfinder context",
-      "Found Reddit posts via Google, but encountered issues fetching their content" // Added this specific error
+      "Found Reddit posts via Google, but encountered issues fetching their content" 
     ];
 
   const isContextValidAndNotEmpty = (context: string | null | undefined, source: string | null | undefined): boolean => {
     if (!context || !source || source === 'none') {
       return false;
     }
-    // Check if the context string contains any of the known error/no-result messages
     return !noResultsOrErrorMessages.some(msg => context.toLowerCase().includes(msg.toLowerCase()));
   };
+  
+  interface ContextAPIResponse {
+    context: string;
+    source: string | null; // source can be null if API fails before determining it
+    debugLogs?: string[];
+  }
 
-  const fetchContextAPI = async (apiEndpoint: string, query: string, contextName: string): Promise<{ context: string | null; source: string | null }> => {
+  const fetchContextAPI = async (apiEndpoint: string, query: string, contextName: string): Promise<ContextAPIResponse> => {
     const contextMsgId = `context_fetch_indicator_${contextName}_${Date.now()}`;
     setMessages((prev) => [...prev, {id: contextMsgId, text: `Checking for relevant ${contextName} data...`, sender: 'context-info', timestamp: new Date()}]);
 
     try {
       const response = await fetch(`${apiEndpoint}?query=${encodeURIComponent(query)}`);
-      setMessages(prev => prev.filter(m => m.id !== contextMsgId)); // Remove "Checking..." message
+      setMessages(prev => prev.filter(m => m.id !== contextMsgId)); 
 
       if (!response.ok) {
         console.warn(`[ChatInterface] Failed to fetch ${contextName} context, API responded with non-OK status:`, response.status);
         const errorData = await response.json().catch(() => null);
         const errorMessage = errorData?.context || errorData?.error || `Could not fetch ${contextName} context.`;
-        // Don't add an error message to UI here, let the calling logic decide based on source
-        return { context: errorMessage, source: null }; // Return error in context for upstream handling
+        return { context: errorMessage, source: null, debugLogs: errorData?.debugLogs || [`API Error ${response.status} for ${contextName}`] };
       }
-      const data: { context: string; source: string } = await response.json();
+      const data: ContextAPIResponse = await response.json();
       console.log(`[ChatInterface] Data from ${apiEndpoint} (${contextName}):`, data);
       return data;
     } catch (error) {
       console.error(`[ChatInterface] Error fetching ${contextName} context:`, error);
-      setMessages(prev => prev.filter(m => m.id !== contextMsgId)); // Remove "Checking..." message
+      setMessages(prev => prev.filter(m => m.id !== contextMsgId));
       const errorMessage = `Error fetching ${contextName} context. Proceeding without it.`;
-      // Don't add an error message to UI here, let the calling logic decide based on source
-      return { context: errorMessage, source: null }; // Return error in context for upstream handling
+      return { context: errorMessage, source: null, debugLogs: [(error as Error).message || `Client-side fetch error for ${contextName}`] };
     }
   };
 
@@ -165,8 +168,13 @@ const ChatInterface = () => {
 
     setIsFetchingContext(true);
 
-    // 1. Try Reddit (Experimental)
-    const redditData = await fetchContextAPI('/api/reddit-context', messageText, 'Reddit (Experimental)');
+    const redditData = await fetchContextAPI('/api/reddit-context', messageText, 'Reddit');
+    if (redditData.debugLogs && redditData.debugLogs.length > 0) {
+      redditData.debugLogs.forEach((log, index) => {
+        setMessages((prev) => [...prev, {id: `debug_reddit_${Date.now()}_${index}`, text: `🔧 DEBUG (Reddit): ${log}`, sender: 'debug-info', timestamp: new Date()}]);
+      });
+    }
+
     if (redditData.source === 'experimental_google_reddit') {
       if (isContextValidAndNotEmpty(redditData.context, redditData.source)) {
         contextForPrompt = redditData.context;
@@ -174,39 +182,49 @@ const ChatInterface = () => {
         console.log(`[ChatInterface] Using Reddit context from ${contextSourceUsed}.`);
         setMessages((prev) => [...prev, {id: `context_added_reddit_exp_${Date.now()}`, text: `ℹ️ I've included some insights from Reddit (via Google Search) in my considerations.`, sender: 'context-info', timestamp: new Date()}]);
       } else {
-        // Display the (potentially verbose) error/status from experimental_reddit.ts
         const redditStatusMessage = redditData.context || "Experimental Reddit search did not return usable context or encountered an error.";
-        setMessages((prev) => [...prev, {id: `context_status_reddit_exp_${Date.now()}`, text: `ℹ️ Reddit (Experimental): ${redditStatusMessage}`, sender: 'context-info', timestamp: new Date()}]);
+        // The debug logs are already displayed. We can optionally display this summary error too.
+        // For now, let's rely on the debug logs for detailed errors.
         console.log(`[ChatInterface] Experimental Reddit context was not valid or empty. Message: ${redditStatusMessage}`);
+         setMessages((prev) => [...prev, {id: `context_status_reddit_exp_${Date.now()}`, text: `ℹ️ Reddit (Experimental): ${redditStatusMessage}`, sender: 'context-info', timestamp: new Date()}]);
       }
-    } else if (redditData.context) { // If source is null but context (error message) exists
-        setMessages((prev) => [...prev, {id: `context_error_reddit_exp_${Date.now()}`, text: `ℹ️ Reddit (Experimental) Fetch Error: ${redditData.context}`, sender: 'context-info', timestamp: new Date()}]);
-        console.warn(`[ChatInterface] Experimental Reddit API call failed or returned null source. Error: ${redditData.context}`);
+    } else if (redditData.context) { 
+        console.warn(`[ChatInterface] Reddit API call failed or returned null source. Error/Status: ${redditData.context}`);
+        // Debug logs already displayed. This is a fallback general status for UI.
+         setMessages((prev) => [...prev, {id: `context_error_reddit_exp_${Date.now()}`, text: `ℹ️ Reddit Fetch Status: ${redditData.context}`, sender: 'context-info', timestamp: new Date()}]);
     }
 
 
-    // 2. Try Yelp if Reddit failed or was insufficient
     if (!contextForPrompt) {
       const yelpData = await fetchContextAPI('/api/yelp-context', messageText, 'Yelp');
+       if (yelpData.debugLogs && yelpData.debugLogs.length > 0) {
+        yelpData.debugLogs.forEach((log, index) => {
+          setMessages((prev) => [...prev, {id: `debug_yelp_${Date.now()}_${index}`, text: `🔧 DEBUG (Yelp): ${log}`, sender: 'debug-info', timestamp: new Date()}]);
+        });
+      }
       if (isContextValidAndNotEmpty(yelpData.context, yelpData.source)) {
         contextForPrompt = yelpData.context;
         contextSourceUsed = yelpData.source;
         console.log(`[ChatInterface] Using Yelp context.`);
         setMessages((prev) => [...prev, {id: `context_added_yelp_${Date.now()}`, text: `ℹ️ I've included some information from Yelp in my considerations.`, sender: 'context-info', timestamp: new Date()}]);
-      } else if (yelpData.context) { // Log Yelp specific error/status if it returned one
+      } else if (yelpData.context) { 
         setMessages((prev) => [...prev, {id: `context_status_yelp_${Date.now()}`, text: `ℹ️ Yelp: ${yelpData.context}`, sender: 'context-info', timestamp: new Date()}]);
       }
     }
 
-    // 3. Try Petfinder if both Reddit and Yelp failed or were insufficient
     if (!contextForPrompt) {
       const petfinderData = await fetchContextAPI('/api/petfinder-context', messageText, 'Petfinder');
+      if (petfinderData.debugLogs && petfinderData.debugLogs.length > 0) {
+        petfinderData.debugLogs.forEach((log, index) => {
+          setMessages((prev) => [...prev, {id: `debug_petfinder_${Date.now()}_${index}`, text: `🔧 DEBUG (Petfinder): ${log}`, sender: 'debug-info', timestamp: new Date()}]);
+        });
+      }
       if (isContextValidAndNotEmpty(petfinderData.context, petfinderData.source)) {
         contextForPrompt = petfinderData.context;
         contextSourceUsed = petfinderData.source;
         console.log(`[ChatInterface] Using Petfinder context.`);
         setMessages((prev) => [...prev, {id: `context_added_petfinder_${Date.now()}`, text: `ℹ️ I've included some information from Petfinder in my considerations.`, sender: 'context-info', timestamp: new Date()}]);
-      } else if (petfinderData.context) { // Log Petfinder specific error/status
+      } else if (petfinderData.context) { 
          setMessages((prev) => [...prev, {id: `context_status_petfinder_${Date.now()}`, text: `ℹ️ Petfinder: ${petfinderData.context}`, sender: 'context-info', timestamp: new Date()}]);
       }
     }
@@ -224,12 +242,11 @@ const ChatInterface = () => {
       } else if (contextSourceUsed === 'petfinder') {
         contextHeader = "Consider this from Petfinder shelter data:\n";
       }
-      // Note: The specific "I've included..." messages are now handled above when context is confirmed usable or when specific errors are logged.
       augmentedMessage = `${messageText}\n\n${contextHeader}${cleanedContext}`;
       console.log(`[ChatInterface] Context from ${contextSourceUsed} was added to the prompt. actualContextWasAddedToPrompt = true`);
     } else {
       console.log(`[ChatInterface] No suitable external context was found or added to prompt. actualContextWasAddedToPrompt = false.`);
-       if (!messages.some(m => m.text.includes("ℹ️"))) { // Add a generic no-context message if no specific errors were displayed
+       if (!messages.some(m => m.sender === 'context-info' && m.text.startsWith("ℹ️"))) { 
         setMessages((prev) => [...prev, {id: `context_status_none_${Date.now()}`, text: `ℹ️ No specific external context found for this query.`, sender: 'context-info', timestamp: new Date()}]);
        }
     }
@@ -321,7 +338,6 @@ const ChatInterface = () => {
       }
 
       let finalAiText = aiPartialResponse;
-      // Only append derivation tag if context was actually used in the prompt
       if (contextForPrompt && contextSourceUsed) {
         let sourceLabel = "external data";
         if (contextSourceUsed === 'experimental_google_reddit') sourceLabel = "Reddit (via Google)";
@@ -388,7 +404,7 @@ const ChatInterface = () => {
     <div className="flex flex-col h-full w-full min-h-0">
       <ScrollArea className="flex-grow w-full p-4 min-h-0" ref={scrollAreaRef}>
         {messages.length === 0 && showSuggestions && !isLoading && !isFetchingContext ? (
-          <div> {/* Wrapper for suggestions */}
+          <div> 
             <p className="text-sm text-muted-foreground mb-3 flex items-center gap-1.5">
               <HelpCircle size={16} />
               Not sure what to ask? Try one of these:
@@ -408,7 +424,7 @@ const ChatInterface = () => {
             </div>
           </div>
         ) : (
-          <div className="space-y-4"> {/* Existing messages map */}
+          <div className="space-y-4"> 
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -423,9 +439,12 @@ const ChatInterface = () => {
                     <AvatarFallback><Bot size={18}/></AvatarFallback>
                   </Avatar>
                 )}
-                 {message.sender === 'context-info' && (
+                 {(message.sender === 'context-info' || message.sender === 'debug-info') && (
                   <Avatar className="h-8 w-8 opacity-70">
-                    <AvatarFallback><MessageSquareText size={18} className="text-blue-500"/></AvatarFallback>
+                    <AvatarFallback>
+                        {message.sender === 'context-info' && <MessageSquareText size={18} className="text-blue-500"/>}
+                        {message.sender === 'debug-info' && <AlertTriangleIcon size={18} className="text-orange-500"/>}
+                    </AvatarFallback>
                   </Avatar>
                 )}
                 <div
@@ -435,7 +454,9 @@ const ChatInterface = () => {
                       ? 'bg-primary text-primary-foreground'
                       : message.sender === 'ai'
                       ? 'bg-card text-card-foreground border'
-                      : 'bg-blue-50 border border-blue-200 text-blue-700 text-xs italic'
+                      : message.sender === 'context-info'
+                      ? 'bg-blue-50 border border-blue-200 text-blue-700 text-xs italic'
+                      : 'bg-orange-50 border border-orange-300 text-orange-700 text-xs' // Debug info style
                   )}
                 >
                   {message.text || (message.sender === 'ai' && isLoading && messages.length > 0 && messages[messages.length -1]?.id === message.id && <Loader2 className="h-4 w-4 animate-spin" />)}
@@ -454,7 +475,7 @@ const ChatInterface = () => {
           </div>
         )}
         { (isLoading || isFetchingContext) && messages[messages.length-1]?.sender === 'user' && !messages.some(m => m.sender === 'context-info' && m.text.includes('Checking for relevant')) && (
-           <div className="flex items-end gap-2 justify-start mt-4"> {/* Added mt-4 for spacing if spinner appears after user message */}
+           <div className="flex items-end gap-2 justify-start mt-4"> 
               <Avatar className="h-8 w-8">
                   <AvatarImage src="https://placehold.co/40x40.png" alt="PawPal AI" data-ai-hint="robot dog" />
                   <AvatarFallback><Bot size={18}/></AvatarFallback>
@@ -486,4 +507,3 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
-
