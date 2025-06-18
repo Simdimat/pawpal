@@ -2,7 +2,7 @@
 'use server';
 
 import axios from 'axios';
-import { fetchPostComments, type RedditComment } from '@/services/reddit'; // Import from existing Reddit service
+import { fetchPostComments, type RedditComment } from '@/services/reddit'; 
 
 interface GoogleOrganicResult {
   title: string;
@@ -28,7 +28,7 @@ async function fetchGoogleSearchResults(userQuestion: string): Promise<GoogleOrg
     throw new Error("Scrapingdog API Key not configured. Please set SCRAPINGDOG_API_KEY in your environment variables.");
   }
   const query = `${userQuestion} site:reddit.com`;
-  const url = `https://api.scrapingdog.com/google?api_key=${SCRAPINGDOG_API_KEY}&q=${encodeURIComponent(query)}&location=United+States`;
+  const url = `https://api.scrapingdog.com/google?api_key=${SCRAPINGDOG_API_KEY}&q=${encodeURIComponent(query)}&page=0&location=United+States`;
 
   console.log(`[Experimental Reddit] Fetching Google search results from Scrapingdog for query: "${query}"`);
 
@@ -78,11 +78,11 @@ export async function searchAndFetchFullRedditPosts(userQuestion: string, result
         continue;
       }
 
-      const postFullName = `t3_${postIdBase}`;
+      const postFullName = `t3_${postIdBase}`; // Reddit API expects fullname with t3_ prefix for posts
       console.log(`[Experimental Reddit] Fetching comments for post: ${postFullName} (Title: ${result.title})`);
 
       try {
-        const comments: RedditComment[] = await fetchPostComments(postFullName, 2); 
+        const comments: RedditComment[] = await fetchPostComments(postFullName, 2); // Fetch top 2 comments
 
         summary += `Post: "${result.title}"\n`;
         if (result.snippet) {
@@ -102,25 +102,25 @@ export async function searchAndFetchFullRedditPosts(userQuestion: string, result
       } catch (commentError: any) {
         let errorDetail = commentError.message || "Unknown error fetching comments";
         
-        console.error(`[Experimental Reddit] Error fetching comments for post ${postFullName} (Title: ${result.title}):`, errorDetail);
-        // Log the full error object, especially response data if it's an Axios error
-        if (axios.isAxiosError(commentError) && commentError.response) {
+        // Attempt to get more detailed error from Axios response if available
+        if (axios.isAxiosError(commentError) && commentError.response && commentError.response.data) {
             console.error(`[Experimental Reddit] Full comment error data for ${postFullName}:`, JSON.stringify(commentError.response.data, null, 2));
-            // Try to get a more specific message from Reddit's response
             const redditErrorMsg = commentError.response.data?.message || commentError.response.data?.error_description || commentError.response.data?.error;
             if (redditErrorMsg) {
-                errorDetail = `Reddit API Error (${commentError.response.status}): ${redditErrorMsg}. Full details: ${JSON.stringify(commentError.response.data)}`;
+                errorDetail = `Reddit API Error (${commentError.response.status}): ${redditErrorMsg}. Full Response: ${JSON.stringify(commentError.response.data)}`;
             } else {
-                errorDetail = `Reddit API Error (${commentError.response.status}). Full details: ${JSON.stringify(commentError.response.data)}`;
+                errorDetail = `Reddit API Error (${commentError.response.status}). Full Response: ${JSON.stringify(commentError.response.data)}`;
             }
         } else {
             console.error(`[Experimental Reddit] Non-Axios error or no response data for ${postFullName}:`, commentError);
         }
+        
+        console.error(`[Experimental Reddit] Error fetching comments for post ${postFullName} (Title: ${result.title}):`, errorDetail);
 
         if (!firstCommentErrorDetail) {
           firstCommentErrorDetail = `Failed on post "${result.title}": ${errorDetail}`;
         }
-        summary += `Post: "${result.title}"\n  Could not fetch comments for this post (Error: ${errorDetail.substring(0, 250)}${errorDetail.length > 250 ? '...' : ''}).\n\n`;
+        summary += `Post: "${result.title}"\n  Could not fetch comments for this post (Error: ${errorDetail.substring(0, 350)}${errorDetail.length > 350 ? '...' : ''}).\n\n`;
       }
     }
 
@@ -128,7 +128,7 @@ export async function searchAndFetchFullRedditPosts(userQuestion: string, result
         const baseMessage = "Found Reddit posts via Google, but encountered issues fetching their content.";
         return firstCommentErrorDetail ? `${baseMessage} First error detail: ${firstCommentErrorDetail}` : baseMessage;
     }
-    if (postsProcessed === 0 && topResults.length === 0) { // Should be caught by googleResults.length === 0 check earlier
+    if (postsProcessed === 0 && topResults.length === 0) { 
         return "No relevant Reddit discussions found via Google search for your query.";
     }
 

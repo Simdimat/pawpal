@@ -5,12 +5,23 @@ import axios from 'axios';
 let redditAccessToken: string | null = null;
 let tokenExpirationTime: number | null = null;
 
+function getUserAgent(): string {
+  const appOwnerUsername = process.env.REDDIT_APP_OWNER_USERNAME;
+  if (!appOwnerUsername || appOwnerUsername === 'YOUR_REDDIT_USERNAME_HERE') {
+    console.warn('[RedditService] REDDIT_APP_OWNER_USERNAME is not set or is default. Using generic User-Agent. This might lead to API blocks.');
+    return 'PawPalSD-Server/1.0 by FirebaseStudio'; // A generic fallback
+  }
+  // Format: <platform>:<app ID>:<version string> (by /u/<Reddit username>)
+  // platform: web, android, ios | app ID: usually reverse domain | version: your app's version
+  return `web:com.pawpalsd.app:v1.0.0 (by /u/${appOwnerUsername})`;
+}
+
 const getNewAccessToken = async (): Promise<string> => {
   const client_id = process.env.REDDIT_CLIENT_ID;
   const client_secret = process.env.REDDIT_CLIENT_SECRET;
-  const userAgent = process.env.REDDIT_USER_AGENT || 'PawPalSD/1.0 (by u/SDAutomatIon)';
+  const effectiveUserAgent = getUserAgent();
 
-  console.log('[RedditService] Attempting to get new access token.');
+  console.log(`[RedditService] Attempting to get new access token with User-Agent: ${effectiveUserAgent}`);
   if (!client_id || !client_secret) {
     console.error('[RedditService] Reddit Client ID or Client Secret not configured.');
     throw new Error('Reddit Client ID and Client Secret not configured.');
@@ -26,7 +37,7 @@ const getNewAccessToken = async (): Promise<string> => {
         headers: {
           Authorization: `Basic ${auth}`,
           'Content-Type': 'application/x-www-form-urlencoded',
-          'User-Agent': userAgent,
+          'User-Agent': effectiveUserAgent,
         },
       }
     );
@@ -37,10 +48,14 @@ const getNewAccessToken = async (): Promise<string> => {
     console.log('[RedditService] Successfully acquired new Reddit access token.');
     return access_token;
   } catch (error: any) {
-    console.error('[RedditService] Error getting new Reddit access token:', error.response?.data || error.message);
+    console.error('[RedditService] Error getting new Reddit access token.');
     if (axios.isAxiosError(error) && error.response) {
       console.error('[RedditService] New Token Error Response Status:', error.response.status);
       console.error('[RedditService] New Token Error Response Data:', JSON.stringify(error.response.data, null, 2));
+      const apiErrorMsg = error.response.data?.message || error.response.data?.error_description || error.response.data?.error || error.message;
+      throw new Error(`Reddit Token API Error (${error.response.status}): ${apiErrorMsg}. Full details: ${JSON.stringify(error.response.data)}`);
+    } else {
+      console.error('[RedditService] Non-Axios error during token fetch:', error.message);
     }
     throw new Error('Failed to get new Reddit access token.');
   }
@@ -51,7 +66,7 @@ export async function makeAuthenticatedRedditRequest(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
   data?: any
 ): Promise<any> {
-  const userAgent = process.env.REDDIT_USER_AGENT || 'PawPalSD/1.0 (by u/SDAutomatIon)';
+  const effectiveUserAgent = getUserAgent();
   try {
     const currentTime = Math.floor(Date.now() / 1000);
     if (!redditAccessToken || !tokenExpirationTime || currentTime >= tokenExpirationTime) {
@@ -65,7 +80,7 @@ export async function makeAuthenticatedRedditRequest(
       data,
       headers: {
         Authorization: `Bearer ${redditAccessToken}`,
-        'User-Agent': userAgent,
+        'User-Agent': effectiveUserAgent,
       },
     });
     return response.data;
@@ -75,14 +90,13 @@ export async function makeAuthenticatedRedditRequest(
       if (error.response) {
         console.error('[RedditService] Error Response Status:', error.response.status);
         console.error('[RedditService] Error Response Data:', JSON.stringify(error.response.data, null, 2));
-        // Propagate a more informative error message
         const apiErrorMsg = error.response.data?.message || error.response.data?.error_description || error.response.data?.error || error.message;
-        throw new Error(`Reddit API Error (${error.response.status}): ${apiErrorMsg}`);
+        throw new Error(`Reddit API Error (${error.response.status}): ${apiErrorMsg}. Full details: ${JSON.stringify(error.response.data)}`);
       }
     } else {
       console.error(`[RedditService] Non-Axios error during authenticated request to ${url}:`, error);
     }
-    throw error; // Re-throw the original or wrapped error
+    throw error; 
   }
 }
 
@@ -149,7 +163,7 @@ export async function searchReddit(
       limit: limit.toString(),
       sort,
       t: timeframe,
-      restrict_sr: '0',
+      restrict_sr: '0', // Ensure search is not restricted to a single SR if multiple are specified indirectly
     });
      console.log(`[RedditService] Constructed general search with subreddits. Full query for API: ${fullQuery}`);
   } else {
@@ -179,13 +193,11 @@ export async function searchReddit(
     console.log(`[RedditService] Reddit search for "${query}" on "${primarySubreddit || (subreddits ? subreddits.join(', ') : 'all')}" returned no data.children.`);
     return [];
   } catch (error: any) {
-    // Error is already logged by makeAuthenticatedRedditRequest
     console.error(`[RedditService] Search Reddit failed for query "${query}". Error: ${error.message}`);
     return [];
   }
 }
 
-// Interface for a single comment
 export interface RedditComment {
   id: string;
   author: string;
@@ -200,16 +212,14 @@ interface RedditCommentListingChild {
   data: RedditComment;
 }
 
-// Response structure for comments: an array where
-// element 0 is the post listing, element 1 is the comment listing.
 interface RedditCommentsResponse extends Array<any> {
-  0: { // Post listing data
+  0: { 
     kind: string;
     data: {
-      children: { kind: string; data: RedditPost }[]; // Details of the post itself
+      children: { kind: string; data: RedditPost }[]; 
     };
   };
-  1: { // Comment listing data
+  1: { 
     kind: string;
     data: {
       children: RedditCommentListingChild[];
@@ -247,8 +257,7 @@ export async function fetchPostComments(postId: string, limit: number = 3, sort:
     console.log(`[RedditService] No comments found or unexpected response structure for post ${postFullName}.`);
     return [];
   } catch (error: any) {
-    // Error is already logged by makeAuthenticatedRedditRequest
     console.error(`[RedditService] Fetch comments failed for post ${postFullName}. Error: ${error.message}`);
-    throw error; // Re-throw to be caught by the caller in experimental_reddit.ts
+    throw error; 
   }
 }
