@@ -9,7 +9,7 @@ interface GoogleOrganicResult {
   link: string;
   snippet?: string;
   position?: number;
-  rank?: number; // Scrapingdog sometimes uses 'rank'
+  rank?: number;
 }
 
 interface ScrapingdogGoogleResponse {
@@ -19,7 +19,7 @@ interface ScrapingdogGoogleResponse {
     query_displayed?: string;
   };
   organic_results?: GoogleOrganicResult[];
-  error?: string; // Scrapingdog might return an error in this field
+  error?: string;
   message?: string; // Sometimes errors are in 'message'
   status?: number;  // And include a status
 }
@@ -35,7 +35,6 @@ interface FetchTopLinksReturn {
 }
 
 const SCRAPINGDOG_API_KEY = process.env.SCRAPINGDOG_API_KEY;
-// A common browser User-Agent string
 const browserUserAgent =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
   'AppleWebKit/537.36 (KHTML, like Gecko) ' +
@@ -84,13 +83,11 @@ async function fetchGoogleSearchResults(
   const requestConfig = {
     headers: {
       'User-Agent': browserUserAgent,
-      // Potentially add other headers if cURL sends them and they seem relevant
-      // 'Accept': 'application/json, text/plain, */*', // Axios default
-      // 'Accept-Encoding': 'gzip, compress, deflate, br', // Browsers send this
+      'Accept': '*/*', // Changed to match cURL default
+      // 'Accept-Encoding': 'gzip, deflate', // Simplified or let Axios handle
     },
-    // timeout: 10000, // Example: 10 second timeout
   };
-
+  
   localDebugLogs.push(
     `[Experimental Reddit] Axios request config being used: ${JSON.stringify(requestConfig, null, 2)}`
   );
@@ -126,32 +123,31 @@ async function fetchGoogleSearchResults(
     );
     return { results: data.organic_results, debugLogs: localDebugLogs };
   } catch (err: any) {
-    let detailedError = `Error Message: ${err.message}`;
     localDebugLogs.push(`[Experimental Reddit] Axios CATCH block entered for Scrapingdog API call to ${apiUrl}.`);
 
     if (axios.isAxiosError(err)) {
-      detailedError = `AxiosError: ${err.message}`;
       localDebugLogs.push(`[Experimental Reddit] Error is AxiosError. Code: ${err.code || 'N/A'}`);
       if (err.response) {
-        detailedError += ` | Status: ${err.response.status} | Response Data: ${JSON.stringify(err.response.data)}`;
         localDebugLogs.push(`[Experimental Reddit] err.response.status: ${err.response.status}`);
         localDebugLogs.push(`[Experimental Reddit] err.response.data: ${JSON.stringify(err.response.data, null, 2)}`);
         localDebugLogs.push(`[Experimental Reddit] err.response.headers: ${JSON.stringify(err.response.headers, null, 2)}`);
+        const detailedError = `AxiosError: ${err.message} | Status: ${err.response.status} | Response Data: ${JSON.stringify(err.response.data)}`;
+        localDebugLogs.push(`[Experimental Reddit] Full Axios error during Scrapingdog API call: ${detailedError}`);
+
       } else if (err.request) {
-        detailedError += ` | No response received. Request data: ${JSON.stringify(err.request)}. Check network or CORS if applicable.`;
-        // err.request can be an instance of http.ClientRequest in Node.js. Logging parts of it.
         localDebugLogs.push(`[Experimental Reddit] No response received (err.request is present). Request details may be complex.`);
-        localDebugLogs.push(`[Experimental Reddit] err.request.method: ${err.request.method}`);
-        localDebugLogs.push(`[Experimental Reddit] err.request.path: ${err.request.path}`);
+        // Consider logging parts of err.request if safe and useful, e.g., err.request.method, err.request.path
+      } else {
+        localDebugLogs.push(`[Experimental Reddit] AxiosError without response or request object: ${err.message}`);
       }
     } else {
-       localDebugLogs.push(`[Experimental Reddit] Error is not an AxiosError. Type: ${typeof err}`);
+       localDebugLogs.push(`[Experimental Reddit] Error is not an AxiosError. Type: ${typeof err}. Message: ${err.message}`);
     }
     
-    localDebugLogs.push(`[Experimental Reddit] Full Axios error during Scrapingdog API call: ${detailedError}`);
-    // Log the config that was used for this failed request
     if (err.config) {
         localDebugLogs.push(`[Experimental Reddit] Axios config for failed request: ${JSON.stringify(err.config, null, 2)}`);
+    } else {
+        localDebugLogs.push(`[Experimental Reddit] No err.config available for failed request.`);
     }
 
     return { results: [], debugLogs: localDebugLogs };
@@ -170,9 +166,8 @@ export async function fetchTopGoogleRedditLinksAndDebug(
   try {
     const {
       results: googleResults,
-      debugLogs: searchDebugLogs,
+      debugLogs: searchDebugLogs, // This will be the same array instance due to how it's passed
     } = await fetchGoogleSearchResults(userQuery, cumulativeDebugLogs);
-    // Note: cumulativeDebugLogs is passed by reference and modified by fetchGoogleSearchResults
 
     if (!googleResults || googleResults.length === 0) {
       cumulativeDebugLogs.push(
@@ -183,23 +178,14 @@ export async function fetchTopGoogleRedditLinksAndDebug(
         debugLogs: cumulativeDebugLogs,
       };
     }
-
-    // Already logged the full raw response in fetchGoogleSearchResults
-    // cumulativeDebugLogs.push(
-    //   `[Experimental Reddit] Raw organic_results from Scrapingdog (first 3 for UI): ${JSON.stringify(
-    //     googleResults.slice(0, 3),
-    //     null,
-    //     2
-    //   )}`
-    // );
-
+    
     const redditSiteLinks = googleResults
       .filter((r) => r.link && r.link.toLowerCase().includes("reddit.com"))
-      .map((r) => ({ title: r.title, link: r.link, snippet: r.snippet || '' })); // Keep title and snippet
+      .map((r) => r.link);
 
     cumulativeDebugLogs.push(
       `[Experimental Reddit] Filtered Reddit-specific results (count: ${redditSiteLinks.length}): ${JSON.stringify(
-        redditSiteLinks.slice(0,resultLimit) // Log only the ones we'll use for brevity
+        redditSiteLinks
       )}`
     );
 
@@ -216,25 +202,22 @@ export async function fetchTopGoogleRedditLinksAndDebug(
     const topLinksToReturn = redditSiteLinks.slice(0, resultLimit);
     cumulativeDebugLogs.push(
       `[Experimental Reddit] Top ${topLinksToReturn.length} Reddit links extracted for summary: ${JSON.stringify(
-        topLinksToReturn.map(l => l.link) // Just log the links for this message
+        topLinksToReturn
       )}`
     );
 
     let summary = `Top ${topLinksToReturn.length} Reddit link(s) found via Google for your query "${userQuery}":\n`;
     if (topLinksToReturn.length > 0) {
-      topLinksToReturn.forEach((item, index) => {
-        summary += `${index + 1}. Title: ${item.title}\n   Link: ${item.link}\n`;
-        if (item.snippet) {
-            summary += `   Snippet: ${item.snippet}\n`;
-        }
+      topLinksToReturn.forEach((link, index) => {
+        summary += `${index + 1}. ${link}\n`;
       });
     } else {
       summary = "No relevant Reddit links were found in the top Google search results to list.";
       cumulativeDebugLogs.push("[Experimental Reddit] No links to list in summary as topLinksToReturn is empty after slicing.");
     }
-
+    
     cumulativeDebugLogs.push(
-      `[Experimental Reddit] Final summary constructed (just links). Length: ${summary.trim().length}`
+      `[Experimental Reddit] Final summary constructed. Length: ${summary.trim().length}`
     );
     return { summary: summary.trim(), debugLogs: cumulativeDebugLogs };
 
@@ -253,4 +236,3 @@ export async function fetchTopGoogleRedditLinksAndDebug(
     };
   }
 }
-    
