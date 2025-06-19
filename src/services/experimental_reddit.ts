@@ -2,17 +2,17 @@
 'use server';
 
 import axios from 'axios';
-// Temporarily removing direct Reddit service imports for focused debugging of Scrapingdog step
-// import { fetchPostComments, type RedditComment } from '@/services/reddit';
 
+// Interface for the structure of Google organic results from Scrapingdog
 interface GoogleOrganicResult {
   title: string;
   link: string;
-  snippet?: string; // Snippet is sometimes missing
+  snippet?: string;
   position?: number;
-  rank?: number;
+  rank?: number; // Scrapingdog sometimes uses rank
 }
 
+// Interface for the expected overall response from Scrapingdog Google Search API
 interface ScrapingdogGoogleResponse {
   search_information?: {
     total_results?: string;
@@ -20,14 +20,17 @@ interface ScrapingdogGoogleResponse {
     query_displayed?: string;
   };
   organic_results?: GoogleOrganicResult[];
-  error?: string; // Added to catch API-level errors from Scrapingdog
+  error?: string; // To catch API-level errors from Scrapingdog
+  // pagination and other fields might exist but are not used currently
 }
 
+// Return type for fetchGoogleSearchResults, including debug logs
 interface FetchGoogleResultsReturn {
   results: GoogleOrganicResult[];
   debugLogs: string[];
 }
 
+// Return type for the main exported function, including debug logs
 interface FetchTopLinksReturn {
   summary: string;
   debugLogs: string[];
@@ -35,19 +38,20 @@ interface FetchTopLinksReturn {
 
 const SCRAPINGDOG_API_KEY = process.env.SCRAPINGDOG_API_KEY;
 
+// Function to fetch Google search results using Scrapingdog
 async function fetchGoogleSearchResults(userQuestion: string): Promise<FetchGoogleResultsReturn> {
   const localDebugLogs: string[] = [];
   localDebugLogs.push(`[Experimental Reddit] Entered fetchGoogleSearchResults for userQuestion: "${userQuestion}"`);
 
   if (!SCRAPINGDOG_API_KEY) {
     const errorMsg = "[Experimental Reddit] Scrapingdog API Key not configured.";
-    console.error(errorMsg);
+    console.error(errorMsg); // Server log
     localDebugLogs.push(errorMsg);
     return { results: [], debugLogs: localDebugLogs };
   }
 
   const googleQuery = `${userQuestion} site:reddit.com`;
-  // CORRECTED: Changed &q= to &query=
+  // Ensure the query parameter is 'query' and not 'q'
   const apiUrl = `https://api.scrapingdog.com/google?api_key=${SCRAPINGDOG_API_KEY}&query=${encodeURIComponent(googleQuery)}&page=0&country=us&results=10&advance_search=false&ai_overview=false`;
 
   const fetchingMsg = `[Experimental Reddit] Constructed Scrapingdog API URL: ${apiUrl}`;
@@ -55,14 +59,21 @@ async function fetchGoogleSearchResults(userQuestion: string): Promise<FetchGoog
   localDebugLogs.push(fetchingMsg);
 
   try {
-    localDebugLogs.push(`[Experimental Reddit] Attempting to call Scrapingdog API...`);
-    const { data } = await axios.get<ScrapingdogGoogleResponse>(apiUrl);
+    localDebugLogs.push(`[Experimental Reddit] Attempting to call Scrapingdog API with a browser-like User-Agent...`);
+    
+    // Define a common browser User-Agent
+    const browserUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+
+    const { data } = await axios.get<ScrapingdogGoogleResponse>(apiUrl, {
+      headers: {
+        'User-Agent': browserUserAgent,
+      }
+    });
     localDebugLogs.push(`[Experimental Reddit] Scrapingdog API call completed.`);
 
-    // Log the entire raw response for detailed inspection
     const rawResponseLog = `[Experimental Reddit] Raw FULL JSON response from Scrapingdog: ${JSON.stringify(data, null, 2)}`;
-    console.log(rawResponseLog); // Server log
-    localDebugLogs.push(rawResponseLog);
+    console.log(rawResponseLog); // Server log for Vercel/local terminal
+    localDebugLogs.push(rawResponseLog); // For chatbot UI debugging
 
     if (data.error) {
       const apiErrorMsg = `[Experimental Reddit] Scrapingdog API returned an error in response: ${data.error}`;
@@ -94,7 +105,8 @@ async function fetchGoogleSearchResults(userQuestion: string): Promise<FetchGoog
   }
 }
 
-// Simplified function to only fetch and return top 3 Google Reddit links
+// Main function to be called by the API route
+// This version focuses on getting the top 3 Google search results (links) via Scrapingdog
 export async function fetchTopGoogleRedditLinksAndDebug(userQuery: string, resultLimit: number = 3): Promise<FetchTopLinksReturn> {
   let cumulativeDebugLogs: string[] = [];
   const startingSearchMsg = `[Experimental Reddit] Starting fetchTopGoogleRedditLinksAndDebug for userQuery: "${userQuery}", resultLimit: ${resultLimit}`;
@@ -111,24 +123,19 @@ export async function fetchTopGoogleRedditLinksAndDebug(userQuery: string, resul
       cumulativeDebugLogs.push(noGoogleResultsMsg);
       return { summary: "Scrapingdog/Google search returned no organic results for your query.", debugLogs: cumulativeDebugLogs };
     }
+    
+    // Filter for actual Reddit links
+    const redditSiteLinks = googleResults.filter(r => r.link && r.link.toLowerCase().includes('reddit.com'));
+    cumulativeDebugLogs.push(`[Experimental Reddit] Filtered Reddit-specific results from Google (count: ${redditSiteLinks.length}): ${JSON.stringify(redditSiteLinks.map(r => r.link))}`);
 
-    cumulativeDebugLogs.push(`[Experimental Reddit] Received ${googleResults.length} organic results from Scrapingdog. Will log first 3 (or fewer) raw results if available.`);
-    // Log only a subset of raw results to keep UI logs manageable for this specific test
-    const rawResultsToLog = googleResults.slice(0, 3);
-    cumulativeDebugLogs.push(`[Experimental Reddit] Raw organic_results from Scrapingdog (first ${rawResultsToLog.length}): ${JSON.stringify(rawResultsToLog, null, 2)}`);
-
-
-    const redditResults = googleResults.filter(r => r.link && r.link.toLowerCase().includes('reddit.com'));
-    cumulativeDebugLogs.push(`[Experimental Reddit] Filtered Reddit-specific results (count: ${redditResults.length}): ${JSON.stringify(redditResults.map(r => r.link))}`);
-
-    if (redditResults.length === 0) {
+    if (redditSiteLinks.length === 0) {
       const noRedditLinksMsg = "[Experimental Reddit] No Reddit.com links found in the Google search results after filtering.";
       console.log(noRedditLinksMsg); // Server log
       cumulativeDebugLogs.push(noRedditLinksMsg);
       return { summary: "No Reddit.com links found in the Google search results for your query.", debugLogs: cumulativeDebugLogs };
     }
 
-    const topLinksToReturn = redditResults.slice(0, resultLimit).map(r => r.link);
+    const topLinksToReturn = redditSiteLinks.slice(0, resultLimit).map(r => r.link);
     cumulativeDebugLogs.push(`[Experimental Reddit] Top ${topLinksToReturn.length} Reddit links extracted for summary: ${JSON.stringify(topLinksToReturn)}`);
 
     let summary = `Top ${topLinksToReturn.length} Reddit links found via Google for your query "${userQuery}":\n`;
