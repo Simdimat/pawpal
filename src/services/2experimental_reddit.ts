@@ -2,6 +2,7 @@
 'use server';
 
 import axios from 'axios';
+import { fetchPostComments, type RedditComment } from '@/services/reddit'; // Import fetchPostComments
 
 interface GoogleOrganicResult {
   title: string;
@@ -19,8 +20,8 @@ interface ScrapingdogGoogleResponse {
   };
   organic_results?: GoogleOrganicResult[];
   error?: string;
-  message?: string; // Sometimes errors are in 'message'
-  status?: number;  // And include a status
+  message?: string;
+  status?: number; 
 }
 
 interface FetchGoogleResultsReturnEnhanced {
@@ -36,6 +37,31 @@ interface FetchTopLinksReturn {
 const SCRAPINGDOG_API_KEY = process.env.SCRAPINGDOG_API_KEY;
 const browserUserAgent =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+
+
+function extractPostIdFromUrl(url: string): string | null {
+    // Regex to capture the post ID from various Reddit URL formats
+    // Handles:
+    // - /r/subreddit/comments/postid/title/
+    // - /r/subreddit/comments/postid/
+    // - /comments/postid/
+    // - /postid (less common, but good to be robust)
+    // It looks for "/comments/" followed by an alphanumeric ID, or just an ID if it's at the end of a path segment.
+    const match = url.match(/\/comments\/([a-z0-9]+)(?:\/|$)/i);
+    if (match && match[1]) {
+      return match[1];
+    }
+    // Fallback for URLs that might just end in /postid or have it as a segment
+    const simpleIdMatch = url.match(/\/([a-z0-9]{6,})(?:\/|\?|$)/i);
+    if (simpleIdMatch && simpleIdMatch[1] && simpleIdMatch[1].length >= 6 && !simpleIdMatch[1].includes('/')) {
+        // Check if it's not a common subreddit name mistaken for an ID
+        if (!["r", "u", "user", "wiki", "submit", "message", "login", "search"].includes(simpleIdMatch[1].toLowerCase())) {
+            return simpleIdMatch[1];
+        }
+    }
+    return null;
+  }
+  
 
 async function fetchGoogleSearchResults(
   userQuestion: string,
@@ -58,16 +84,14 @@ async function fetchGoogleSearchResults(
 
   const encodedGoogleQueryString = encodeURIComponent(googleQueryString);
   localDebugLogs.push(`[Experimental Reddit] Encoded googleQueryString for URL: "${encodedGoogleQueryString}"`);
-
-  // Use &query= and advance_search=true
+  
   const apiUrl = `https://api.scrapingdog.com/google?api_key=${SCRAPINGDOG_API_KEY}&query=${encodedGoogleQueryString}&page=0&country=us&results=10&advance_search=true&ai_overview=false`;
   localDebugLogs.push(`[Experimental Reddit] Final Constructed Scrapingdog API URL: ${apiUrl}`);
-
+  
   const requestConfig = {
     headers: {
       'User-Agent': browserUserAgent,
-      'Accept': '*/*', // Mimic cURL's default Accept header
-      // 'Accept-Encoding': 'gzip, deflate, br', // Let Axios handle this or remove if issues persist
+      'Accept': '*/*', // Mimic cURL more closely
     },
   };
   localDebugLogs.push(`[Experimental Reddit] Axios request config being used: ${JSON.stringify(requestConfig, null, 2)}`);
@@ -104,7 +128,7 @@ async function fetchGoogleSearchResults(
         localDebugLogs.push(`[Experimental Reddit] err.response.data: ${JSON.stringify(err.response.data, null, 2)}`);
         localDebugLogs.push(`[Experimental Reddit] err.response.headers: ${JSON.stringify(err.response.headers, null, 2)}`);
       } else if (err.request) {
-        localDebugLogs.push(`[Experimental Reddit] No response received (err.request is present). Detailed request object: ${JSON.stringify(err.request, null, 2).substring(0, 500)}...`);
+        localDebugLogs.push(`[Experimental Reddit] No response received (err.request is present).`);
       } else {
         localDebugLogs.push(`[Experimental Reddit] AxiosError without response or request object: ${err.message}`);
       }
@@ -122,8 +146,6 @@ async function fetchGoogleSearchResults(
   }
 }
 
-// This function now ONLY fetches Google results, filters for Reddit, and returns top 3 links.
-// It does NOT fetch comments or process post IDs.
 export async function fetchTopGoogleRedditLinksAndDebug(
   userQuery: string,
   resultLimit = 3
@@ -132,9 +154,7 @@ export async function fetchTopGoogleRedditLinksAndDebug(
   cumulativeDebugLogs.push(`[Experimental Reddit] Starting fetchTopGoogleRedditLinksAndDebug for userQuery: "${userQuery}", resultLimit: ${resultLimit}`);
 
   try {
-    // Pass cumulativeDebugLogs to be populated by fetchGoogleSearchResults
     const { results: googleResults, debugLogs: searchDebugLogs } = await fetchGoogleSearchResults(userQuery, cumulativeDebugLogs);
-    // Note: searchDebugLogs is the same array as cumulativeDebugLogs and will already contain logs from fetchGoogleSearchResults.
 
     if (!googleResults || googleResults.length === 0) {
       cumulativeDebugLogs.push("[Experimental Reddit] No Google results returned from fetchGoogleSearchResults to process further.");
@@ -144,17 +164,13 @@ export async function fetchTopGoogleRedditLinksAndDebug(
       };
     }
     
-    // Log the raw organic results here for clarity (showing all results from scrapingdog)
-    // This log was already inside fetchGoogleSearchResults as "Raw FULL JSON response..."
-    // cumulativeDebugLogs.push(`[Experimental Reddit] Raw organic_results received by fetchTopGoogleRedditLinksAndDebug (full): ${JSON.stringify(googleResults, null, 2)}`);
-
-    const redditSiteLinksOnly = googleResults
+    const redditSiteLinksWithTitles = googleResults
       .filter(r => r.link && r.link.toLowerCase().includes("reddit.com"))
-      .map(r => r.link); // Extract just the link string
+      .map(r => ({ link: r.link, title: r.title || "Untitled Reddit Post" })); // Keep title for context
 
-    cumulativeDebugLogs.push(`[Experimental Reddit] Filtered Reddit-specific results (count: ${redditSiteLinksOnly.length}): ${JSON.stringify(redditSiteLinksOnly)}`);
+    cumulativeDebugLogs.push(`[Experimental Reddit] Filtered Reddit-specific results (count: ${redditSiteLinksWithTitles.length}): ${JSON.stringify(redditSiteLinksWithTitles)}`);
 
-    if (!redditSiteLinksOnly.length) {
+    if (!redditSiteLinksWithTitles.length) {
       cumulativeDebugLogs.push("[Experimental Reddit] No reddit.com links found after filtering Google results.");
       return {
         summary: "No Reddit.com links found in the Google search results for your query.",
@@ -162,21 +178,50 @@ export async function fetchTopGoogleRedditLinksAndDebug(
       };
     }
 
-    const topLinksToReturn = redditSiteLinksOnly.slice(0, resultLimit);
-    cumulativeDebugLogs.push(`[Experimental Reddit] Top ${topLinksToReturn.length} Reddit links extracted for summary: ${JSON.stringify(topLinksToReturn)}`);
+    const topResultsToProcess = redditSiteLinksWithTitles.slice(0, resultLimit);
+    cumulativeDebugLogs.push(`[Experimental Reddit] Processing top ${topResultsToProcess.length} Google results for Reddit links.`);
 
-    let summary = `Top ${topLinksToReturn.length} Reddit link(s) found via Google for your query "${userQuery}":\n`;
-    if (topLinksToReturn.length > 0) {
-      topLinksToReturn.forEach((link, index) => {
-        summary += `${index + 1}. ${link}\n`;
-      });
-    } else {
-      summary = "No relevant Reddit links were found in the top Google search results to list.";
-      cumulativeDebugLogs.push("[Experimental Reddit] No links to list in summary as topLinksToReturn is empty after slicing.");
+    let combinedSummary = `Based on Reddit discussions (found via Google) related to your query "${userQuery}":\n\n`;
+    let postsProcessedCount = 0;
+
+    for (const result of topResultsToProcess) {
+      cumulativeDebugLogs.push(`[Experimental Reddit] Processing Google result: Title: "${result.title}", Link: "${result.link}"`);
+      const postId = extractPostIdFromUrl(result.link);
+
+      if (postId) {
+        cumulativeDebugLogs.push(`[Experimental Reddit] Extracted Post ID: ${postId} from URL: ${result.link}`);
+        cumulativeDebugLogs.push(`[Experimental Reddit] Attempting to fetch comments for post: t3_${postId} (Title: ${result.title})`);
+        
+        const { comments, debugLogs: commentFetchLogs } = await fetchPostComments(`t3_${postId}`, 2); // Fetch 2 comments per post
+        cumulativeDebugLogs.push(...commentFetchLogs.map(log => `[Experimental Reddit - Comments for t3_${postId}] ${log}`));
+
+        if (comments.length > 0) {
+          postsProcessedCount++;
+          combinedSummary += `Post: "${result.title}" (Source: ${result.link})\n`;
+          comments.forEach(comment => {
+            combinedSummary += `- Comment by u/${comment.author}: ${comment.body.substring(0, 150)}${comment.body.length > 150 ? '...' : ''}\n`;
+          });
+          combinedSummary += "\n";
+          cumulativeDebugLogs.push(`[Experimental Reddit] Successfully fetched ${comments.length} comments for post t3_${postId}.`);
+        } else {
+          cumulativeDebugLogs.push(`[Experimental Reddit] No relevant comments found or fetched for post t3_${postId}.`);
+           combinedSummary += `Post: "${result.title}" (Source: ${result.link})\n- No relevant comments found for this post.\n\n`;
+        }
+      } else {
+        cumulativeDebugLogs.push(`[Experimental Reddit] Could not extract post ID from URL: ${result.link}. Skipping comment fetch for this link.`);
+         combinedSummary += `Found link: ${result.link} (Could not extract Reddit post ID to fetch comments).\n\n`;
+      }
     }
     
-    cumulativeDebugLogs.push(`[Experimental Reddit] Final summary constructed. Length: ${summary.trim().length}`);
-    return { summary: summary.trim(), debugLogs: cumulativeDebugLogs };
+    if (postsProcessedCount === 0 && topResultsToProcess.length > 0) {
+        combinedSummary = `Found ${topResultsToProcess.length} Reddit link(s) via Google, but could not fetch relevant comments or extract post IDs from them. Links found:\n` + topResultsToProcess.map((r,i) => `${i+1}. ${r.link}`).join('\n');
+    } else if (postsProcessedCount === 0 && topResultsToProcess.length === 0){
+        combinedSummary = "No relevant Reddit posts with comments found via Google for your query.";
+    }
+
+
+    cumulativeDebugLogs.push(`[Experimental Reddit] Final summary constructed. Length: ${combinedSummary.trim().length}`);
+    return { summary: combinedSummary.trim(), debugLogs: cumulativeDebugLogs };
 
   } catch (error: any) {
     cumulativeDebugLogs.push(`[Experimental Reddit] CRITICAL Error in fetchTopGoogleRedditLinksAndDebug: ${error.message}`);
@@ -184,9 +229,10 @@ export async function fetchTopGoogleRedditLinksAndDebug(
       cumulativeDebugLogs.push(`[Experimental Reddit] Stack trace: ${error.stack.substring(0, 300)}...`);
     }
     return {
-      summary: `Error fetching Reddit links via Google: ${error.message}`,
+      summary: `Error fetching and processing Reddit links via Google: ${error.message}`,
       debugLogs: cumulativeDebugLogs,
     };
   }
 }
+
     

@@ -1,4 +1,6 @@
 
+'use server';
+
 import { Buffer } from 'buffer';
 import axios from 'axios';
 
@@ -7,7 +9,6 @@ let tokenExpirationTime: number | null = null;
 
 function getUserAgent(): string {
   const appOwnerUsername = process.env.REDDIT_APP_OWNER_USERNAME;
-  // Ensure there's a fallback if REDDIT_APP_OWNER_USERNAME is somehow undefined or empty after .env processing
   const effectiveUsername = appOwnerUsername || 'PawPalSDAppUser'; 
   
   if (!appOwnerUsername) {
@@ -50,7 +51,7 @@ const getNewAccessToken = async (): Promise<{ token: string, debugLogs: string[]
 
     const { access_token, expires_in } = response.data;
     redditAccessToken = access_token;
-    tokenExpirationTime = Math.floor(Date.now() / 1000) + expires_in - 60; // Refresh 60 seconds before expiry
+    tokenExpirationTime = Math.floor(Date.now() / 1000) + expires_in - 60; 
     const successMsg = `[RedditService] Successfully acquired new Reddit access token. Expires in: ${expires_in}s.`;
     console.log(successMsg);
     debugLogs.push(successMsg);
@@ -138,7 +139,7 @@ export interface RedditPost {
   author: string;
   created_utc: number;
   permalink: string;
-  name: string; // Fullname, e.g., t3_xxxxxx
+  name: string; 
 }
 
 interface RedditListingChild {
@@ -160,12 +161,12 @@ interface RedditSearchResponse {
 
 export async function searchReddit(
   query: string,
-  subreddits?: string[], // e.g., ['sandiego', 'dogs']
+  subreddits?: string[], 
   limit: number = 5,
   sort: 'relevance' | 'hot' | 'top' | 'new' | 'comments' = 'relevance',
   timeframe: 'hour' | 'day' | 'week' | 'month' | 'year' | 'all' = 'year',
-  targetSubredditForUrl?: string, // If provided, constructs URL like /r/targetSubreddit/search
-  restrictToSubredditInQuery: boolean = true // if targetSubredditForUrl, use restrict_sr=1
+  targetSubredditForUrl?: string, 
+  restrictToSubredditInQuery: boolean = true 
 ): Promise<{posts: RedditPost[], debugLogs: string[]}> {
   const debugLogs: string[] = [];
   let url: string;
@@ -176,7 +177,7 @@ export async function searchReddit(
   if (targetSubredditForUrl) {
     url = `https://oauth.reddit.com/r/${targetSubredditForUrl}/search.json`;
     searchParams = new URLSearchParams({
-      q: query, // Query itself might contain subreddit filters if subreddits array is also used
+      q: query, 
       limit: limit.toString(),
       sort,
       t: timeframe,
@@ -188,8 +189,6 @@ export async function searchReddit(
       debugLogs.push(`[RedditService] Searching in r/${targetSubredditForUrl} (restrict_sr=0 or not set). Query should handle subreddit scoping.`);
     }
   } else if (subreddits && subreddits.length > 0) {
-    // If specific subreddits are given (but not a single target for URL construction),
-    // include them in the general search query.
     const subredditQueryPart = subreddits.map(sr => `subreddit:${sr}`).join(' OR ');
     const fullQuery = `${query} (${subredditQueryPart})`;
     url = `https://oauth.reddit.com/search.json`;
@@ -201,7 +200,6 @@ export async function searchReddit(
     });
      debugLogs.push(`[RedditService] General search with subreddit filters in query: "${fullQuery}"`);
   } else {
-    // General search across all Reddit if no subreddits specified
     url = `https://oauth.reddit.com/search.json`;
     searchParams = new URLSearchParams({
       q: query,
@@ -225,7 +223,6 @@ export async function searchReddit(
         debugLogs.push(`[RedditService] Reddit search returned 0 results.`);
       } else {
         debugLogs.push(`[RedditService] Reddit search returned ${searchData.data.children.length} results.`);
-        // debugLogs.push(`[RedditService] Sample posts (first 2 titles if available): ${searchData.data.children.slice(0,2).map(p => p.data.title).join('; ')}`);
       }
       return { posts: searchData.data.children.map(child => child.data), debugLogs };
     }
@@ -248,23 +245,23 @@ export interface RedditComment {
   body: string;
   score: number;
   created_utc: number;
-  name: string; // Fullname, e.g., t1_xxxxxx
-  permalink: string; // e.g., /r/subreddit/comments/postid/comment_title/commentid/
+  name: string; 
+  permalink: string; 
 }
 
 interface RedditCommentListingChild {
-  kind: string; // Should be 't1' for comments
+  kind: string; 
   data: RedditComment;
 }
 
 interface RedditCommentsResponseElement { 
-  kind: string; // 'Listing'
+  kind: string; 
   data: {
     after: string | null;
     dist: number | null;
     modhash: string | null;
     geo_filter: string | null;
-    children: RedditCommentListingChild[] | { kind: string; data: RedditPost }[]; // Can be post data for index 0
+    children: RedditCommentListingChild[] | { kind: string; data: RedditPost }[]; 
     before: string | null;
   };
 }
@@ -283,7 +280,7 @@ export async function fetchPostComments(
   const url = `https://oauth.reddit.com/comments/${postBaseId}.json`; 
   const params = new URLSearchParams({
     sort: sort,
-    limit: (limit + 5).toString(), // Fetch more to filter effectively
+    limit: (limit + 5).toString(), 
     depth: '1', 
   });
   const fullUrl = `${url}?${params.toString()}`;
@@ -294,15 +291,14 @@ export async function fetchPostComments(
     debugLogs.push(...requestDebugLogs);
     const commentsResponse = responseData as RedditCommentsResponse;
 
-    // Comments are typically in the second element of the response array
     if (commentsResponse && commentsResponse.length > 1 && commentsResponse[1] && commentsResponse[1].kind === 'Listing' && commentsResponse[1].data && commentsResponse[1].data.children) {
-      const commentsData = commentsResponse[1].data.children as RedditCommentListingChild[]; // Cast here
+      const commentsData = commentsResponse[1].data.children as RedditCommentListingChild[]; 
       debugLogs.push(`[RedditService] Received ${commentsData.length} raw comment items for post ${postFullName}.`);
 
       const comments: RedditComment[] = commentsData
         .filter(child => child.kind === 't1' && child.data && child.data.body && child.data.body !== '[deleted]' && child.data.body !== '[removed]' && child.data.author !== 'AutoModerator')
         .map(child => child.data)
-        .sort((a, b) => b.score - a.score) // Sort by score descending
+        .sort((a, b) => b.score - a.score) 
         .slice(0, limit); 
 
       debugLogs.push(`[RedditService] Processed ${comments.length} valid, sorted comments for post ${postFullName}.`);
@@ -320,3 +316,5 @@ export async function fetchPostComments(
     return { comments: [], debugLogs };
   }
 }
+
+    
