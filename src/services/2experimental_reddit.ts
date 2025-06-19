@@ -59,17 +59,15 @@ async function fetchGoogleSearchResults(
   const encodedGoogleQueryString = encodeURIComponent(googleQueryString);
   localDebugLogs.push(`[Experimental Reddit] Encoded googleQueryString for URL: "${encodedGoogleQueryString}"`);
 
-  // Using &q= as per ChatGPT's suggestion in the provided code
-  const apiUrl = `https://api.scrapingdog.com/google?api_key=${SCRAPINGDOG_API_KEY}&q=${encodedGoogleQueryString}&page=0&country=us&results=10&advance_search=false&ai_overview=false`;
+  // Use &query= and advance_search=true
+  const apiUrl = `https://api.scrapingdog.com/google?api_key=${SCRAPINGDOG_API_KEY}&query=${encodedGoogleQueryString}&page=0&country=us&results=10&advance_search=true&ai_overview=false`;
   localDebugLogs.push(`[Experimental Reddit] Final Constructed Scrapingdog API URL: ${apiUrl}`);
 
   const requestConfig = {
     headers: {
       'User-Agent': browserUserAgent,
-      // Removed Accept and Accept-Encoding based on previous successful cURL simplicity, and to test minimal headers.
-      // Add them back if issues persist with specific values.
-      // 'Accept': '*/*',
-      // 'Accept-Encoding': 'gzip, deflate, br', 
+      'Accept': '*/*', // Mimic cURL's default Accept header
+      // 'Accept-Encoding': 'gzip, deflate, br', // Let Axios handle this or remove if issues persist
     },
   };
   localDebugLogs.push(`[Experimental Reddit] Axios request config being used: ${JSON.stringify(requestConfig, null, 2)}`);
@@ -77,7 +75,7 @@ async function fetchGoogleSearchResults(
 
   try {
     const { data } = await axios.get<ScrapingdogGoogleResponse>(apiUrl, requestConfig);
-    localDebugLogs.push(`[Experimental Reddit] Scrapingdog API call completed successfully. Status in data: ${data.status || 'N/A (status not in data body)'}`); // Log status from response body if available
+    localDebugLogs.push(`[Experimental Reddit] Scrapingdog API call completed successfully. Status in data: ${data.status || 'N/A (status not in data body)'}`);
     localDebugLogs.push(`[Experimental Reddit] Raw FULL JSON response from Scrapingdog: ${JSON.stringify(data, null, 2)}`);
 
     if (data.error || (data.message && data.status && data.status >= 400)) {
@@ -99,14 +97,14 @@ async function fetchGoogleSearchResults(
     let detailedError = err.message;
 
     if (axios.isAxiosError(err)) {
-      detailedError = `${err.message}${err.response ? ` | Status: ${err.response.status} | Data: ${JSON.stringify(err.response.data)}` : ''}`;
+      detailedError = `${err.message}${err.response ? ` | Status: ${err.response.status} | Response Data: ${JSON.stringify(err.response.data)}` : ''}`;
       localDebugLogs.push(`[Experimental Reddit] Error is AxiosError. Code: ${err.code || 'N/A'}`);
       if (err.response) {
         localDebugLogs.push(`[Experimental Reddit] err.response.status: ${err.response.status}`);
         localDebugLogs.push(`[Experimental Reddit] err.response.data: ${JSON.stringify(err.response.data, null, 2)}`);
         localDebugLogs.push(`[Experimental Reddit] err.response.headers: ${JSON.stringify(err.response.headers, null, 2)}`);
       } else if (err.request) {
-        localDebugLogs.push(`[Experimental Reddit] No response received (err.request is present).`);
+        localDebugLogs.push(`[Experimental Reddit] No response received (err.request is present). Detailed request object: ${JSON.stringify(err.request, null, 2).substring(0, 500)}...`);
       } else {
         localDebugLogs.push(`[Experimental Reddit] AxiosError without response or request object: ${err.message}`);
       }
@@ -124,6 +122,8 @@ async function fetchGoogleSearchResults(
   }
 }
 
+// This function now ONLY fetches Google results, filters for Reddit, and returns top 3 links.
+// It does NOT fetch comments or process post IDs.
 export async function fetchTopGoogleRedditLinksAndDebug(
   userQuery: string,
   resultLimit = 3
@@ -144,24 +144,25 @@ export async function fetchTopGoogleRedditLinksAndDebug(
       };
     }
     
-    // Log the raw organic results here for clarity (showing first 3 or all if fewer)
-    cumulativeDebugLogs.push(`[Experimental Reddit] Raw organic_results received by fetchTopGoogleRedditLinksAndDebug (first ${Math.min(3, googleResults.length)} of ${googleResults.length}): ${JSON.stringify(googleResults.slice(0, 3), null, 2)}`);
+    // Log the raw organic results here for clarity (showing all results from scrapingdog)
+    // This log was already inside fetchGoogleSearchResults as "Raw FULL JSON response..."
+    // cumulativeDebugLogs.push(`[Experimental Reddit] Raw organic_results received by fetchTopGoogleRedditLinksAndDebug (full): ${JSON.stringify(googleResults, null, 2)}`);
 
-    const redditSiteLinks = googleResults
+    const redditSiteLinksOnly = googleResults
       .filter(r => r.link && r.link.toLowerCase().includes("reddit.com"))
       .map(r => r.link); // Extract just the link string
 
-    cumulativeDebugLogs.push(`[Experimental Reddit] Filtered Reddit-specific results (count: ${redditSiteLinks.length}): ${JSON.stringify(redditSiteLinks)}`);
+    cumulativeDebugLogs.push(`[Experimental Reddit] Filtered Reddit-specific results (count: ${redditSiteLinksOnly.length}): ${JSON.stringify(redditSiteLinksOnly)}`);
 
-    if (!redditSiteLinks.length) {
-      cumulativeDebugLogs.push("[Experimental Reddit] No reddit.com links found after filtering.");
+    if (!redditSiteLinksOnly.length) {
+      cumulativeDebugLogs.push("[Experimental Reddit] No reddit.com links found after filtering Google results.");
       return {
         summary: "No Reddit.com links found in the Google search results for your query.",
         debugLogs: cumulativeDebugLogs,
       };
     }
 
-    const topLinksToReturn = redditSiteLinks.slice(0, resultLimit);
+    const topLinksToReturn = redditSiteLinksOnly.slice(0, resultLimit);
     cumulativeDebugLogs.push(`[Experimental Reddit] Top ${topLinksToReturn.length} Reddit links extracted for summary: ${JSON.stringify(topLinksToReturn)}`);
 
     let summary = `Top ${topLinksToReturn.length} Reddit link(s) found via Google for your query "${userQuery}":\n`;
@@ -170,7 +171,6 @@ export async function fetchTopGoogleRedditLinksAndDebug(
         summary += `${index + 1}. ${link}\n`;
       });
     } else {
-      // This case should ideally be caught by the check above, but as a fallback:
       summary = "No relevant Reddit links were found in the top Google search results to list.";
       cumulativeDebugLogs.push("[Experimental Reddit] No links to list in summary as topLinksToReturn is empty after slicing.");
     }
