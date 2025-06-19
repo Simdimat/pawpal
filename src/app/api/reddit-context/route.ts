@@ -31,10 +31,22 @@ export async function GET(request: NextRequest) {
     allDebugLogs.push(...serviceDebugLogs);
     
     // Determine source based on whether summary indicates links were found or just a status message
-    const sourceUsed: RedditContextResponse['source'] = 
-      summary.startsWith("Top") || summary.startsWith("No relevant Reddit links were found") || summary.startsWith("No Reddit.com links found")
-      ? 'experimental_google_reddit' 
-      : 'none';
+    // A successful summary should contain specific keywords like "Based on Reddit discussions" or "Top ... Reddit link(s) found"
+    // and not be one of the error/no-result messages.
+    let sourceUsed: RedditContextResponse['source'] = 'none';
+    const lowerSummary = summary.toLowerCase();
+    const errorOrNoResultIndicators = [
+        "no organic results", 
+        "no reddit.com links found", 
+        "could not fetch relevant comments",
+        "error fetching and processing reddit links",
+        "error fetching experimental reddit context" 
+    ];
+
+    if ( (lowerSummary.includes("based on reddit discussions") || lowerSummary.includes("top reddit link(s) found")) && 
+         !errorOrNoResultIndicators.some(indicator => lowerSummary.includes(indicator)) ) {
+      sourceUsed = 'experimental_google_reddit';
+    }
     
     allDebugLogs.push(`[API /reddit-context EXPERIMENTAL] Context from experimental service (Source: ${sourceUsed}): ${summary.substring(0, 150)}...`);
     
@@ -54,3 +66,4 @@ export async function GET(request: NextRequest) {
     } as RedditContextResponse, { status: 500 });
   }
 }
+
