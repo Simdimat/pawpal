@@ -1,8 +1,9 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchTopGoogleRedditLinksAndDebug } from '@/services/2experimental_reddit';
 
 interface RedditContextResponse {
-  redditContext: string;
+  context: string; // Changed from redditContext to context
   debugLogs?: string[];
   source: 'experimental_google_reddit' | 'reddit_direct_search' | 'none';
 }
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
   if (!originalQuery) {
     allDebugLogs.push('[API /reddit-context EXPERIMENTAL] Original query parameter is missing.');
     return NextResponse.json({
-      redditContext: 'Query parameter is required for Reddit context.',
+      context: 'Query parameter is required for Reddit context.', // Changed field name
       debugLogs: allDebugLogs,
       source: 'none'
     } as RedditContextResponse, { status: 400 });
@@ -29,30 +30,21 @@ export async function GET(request: NextRequest) {
 
     let sourceUsed: RedditContextResponse['source'] = 'none';
     const lowerSummary = summary.toLowerCase();
-    const errorOrNoResultIndicators = [
-      "no organic results",
-      "no reddit.com links found",
-      "could not fetch relevant comments",
-      "error fetching and processing reddit links",
-      "error fetching experimental reddit context"
+    
+    const successfulFetchIndicators = [
+        "based on reddit discussions",
+        "top reddit link(s) found" 
     ];
 
-    const containsUsefulRedditContent = (
-      lowerSummary.includes("based on reddit discussions") ||
-      lowerSummary.includes("found reddit link") ||
-      lowerSummary.includes("found link") ||
-      lowerSummary.includes("reddit-specific results") ||
-      lowerSummary.includes("reddit posts with comments found")
-    ) && !errorOrNoResultIndicators.some(indicator => lowerSummary.includes(indicator));
-
-    if (containsUsefulRedditContent) {
-      sourceUsed = 'experimental_google_reddit';
+    if (successfulFetchIndicators.some(indicator => lowerSummary.includes(indicator))) {
+        sourceUsed = 'experimental_google_reddit';
     }
+
 
     allDebugLogs.push(`[API /reddit-context EXPERIMENTAL] Context from experimental service (Source: ${sourceUsed}): ${summary.substring(0, 150)}...`);
 
     return NextResponse.json({
-      redditContext: summary,
+      context: summary, // Changed field name from redditContext to context
       debugLogs: allDebugLogs,
       source: sourceUsed
     } as RedditContextResponse);
@@ -65,7 +57,7 @@ export async function GET(request: NextRequest) {
       allDebugLogs.push(`[API /reddit-context EXPERIMENTAL] Outer Stack: ${error.stack.substring(0, 200)}...`);
     }
     return NextResponse.json({
-      redditContext: `Error fetching experimental Reddit context (API Level): ${error.message ? error.message.substring(0, 100) : 'Unknown error'}.`,
+      context: `Error fetching experimental Reddit context (API Level): ${error.message ? error.message.substring(0, 100) : 'Unknown error'}.`, // Changed field name
       debugLogs: allDebugLogs,
       source: 'none'
     } as RedditContextResponse, { status: 500 });

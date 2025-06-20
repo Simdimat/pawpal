@@ -92,26 +92,26 @@ const ChatInterface = () => {
   }, [messages]);
 
   const noResultsOrErrorMessages = [
-      "no specific discussions found for this query", // Made more specific
-      "could not extract a concise summary for your query", // Made more specific
-      "could not find specific community discussions regarding this topic", // Made more specific
-      "could not fetch reddit context at this time", // Made more specific
-      "error fetching reddit context due to an issue", // Made more specific
-      "error fetching context from r/sandiego due to an API problem", // Made more specific
-      "error fetching general reddit context, the service may be down", // Made more specific
-      "no relevant yelp listings found for your specific search", // Made more specific
-      "error fetching yelp context, please try again", // Made more specific
-      "no petfinder organizations found matching your criteria", // Made more specific
-      "no relevant petfinder shelter or rescue listings for your location", // Made more specific
-      "error fetching petfinder context, the service may be unavailable", // Made more specific
-      // This one is tricky; good context might contain "found reddit posts via google"
-      // Let's make it very specific to an error condition.
-      "found reddit posts via google, but encountered issues fetching their full content or comments",
-      "scrapingdog/google search returned no organic results for your query" // Kept specific
-    ];
+    "no specific discussions found", // Made more generic to catch variations
+    "could not extract a concise summary",
+    "could not find specific community discussions",
+    "could not fetch reddit context",
+    "error fetching reddit context",
+    "error fetching context from r/sandiego",
+    "error fetching general reddit context",
+    "no relevant yelp listings",
+    "error fetching yelp context",
+    "no petfinder organizations found",
+    "no relevant petfinder shelter or rescue listings",
+    "error fetching petfinder context",
+    "scrapingdog/google search returned no organic results",
+    "error fetching and processing reddit links", // General error from service
+    "failed to fetch data from yelp", // from yelp service error
+    "failed to fetch organizations from petfinder" // from petfinder service error
+  ];
 
   const isContextValidAndNotEmpty = (context: string | null | undefined, source: string | null | undefined): boolean => {
-    console.log('[ChatInterface isContextValidAndNotEmpty] Checking context. Source:', source, 'Context (first 100 chars):', context ? context.substring(0, 100) : 'N/A');
+    console.log('[ChatInterface isContextValidAndNotEmpty] Checking context. Source:', source, 'Context (first 50 chars):', context ? context.substring(0, 50) : 'N/A');
 
     if (!context || !source || source === 'none') {
       console.log('[ChatInterface isContextValidAndNotEmpty] Basic check failed: No context, no source, or source is "none". Returning false.');
@@ -119,14 +119,14 @@ const ChatInterface = () => {
     }
     
     const lowerContext = context.toLowerCase();
-    const isErrorOrNoResult = noResultsOrErrorMessages.some(msg => {
-      const lowerErrorMsg = msg.toLowerCase();
-      const matchFound = lowerContext.includes(lowerErrorMsg);
-      if (matchFound) {
-        console.log(`[ChatInterface isContextValidAndNotEmpty] Context ("${context.substring(0,50)}...") INVALIDATED by matching error/no-result message: "${msg}"`);
-      }
-      return matchFound;
-    });
+    let isErrorOrNoResult = false;
+    for (const msg of noResultsOrErrorMessages) {
+        if (lowerContext.includes(msg.toLowerCase())) {
+            console.log(`[ChatInterface isContextValidAndNotEmpty] Invalid: Context ("${context.substring(0,50)}...") matched error/no-result indicator: "${msg}"`);
+            isErrorOrNoResult = true;
+            break;
+        }
+    }
 
     if (isErrorOrNoResult) {
       console.log('[ChatInterface isContextValidAndNotEmpty] Context matched an error/no-result message. Returning false.');
@@ -164,7 +164,10 @@ const ChatInterface = () => {
         return { context: errorMessage, source: null, debugLogs: errorData?.debugLogs || [`API Error ${response.status} for ${contextName}`] };
       }
       const data: ContextAPIResponse = await response.json();
-      console.log(`[ChatInterface] Data from ${apiEndpoint} (${contextName}):`, {context: data.context.substring(0,100) + "...", source: data.source, debugLogsCount: data.debugLogs?.length});
+      // Safety check for data.context before logging its substring
+      const contextPreview = data.context ? data.context.substring(0,100) + "..." : "N/A (context undefined)";
+      console.log(`[ChatInterface] Data from ${apiEndpoint} (${contextName}):`, {context: contextPreview, source: data.source, debugLogsCount: data.debugLogs?.length});
+
 
       if (data.debugLogs && data.debugLogs.length > 0) {
         data.debugLogs.forEach((log, index) => {
@@ -208,30 +211,32 @@ const ChatInterface = () => {
     setIsFetchingContext(true);
 
     // --- Attempt to fetch Reddit context ---
+    console.log('[ChatInterface processAndSendMessage] Attempting to fetch Reddit context...');
     const redditData = await fetchContextAPI('/api/reddit-context', messageText, 'Reddit');
-    console.log('[ChatInterface DEBUG REDDIT RAW] redditData object:', JSON.stringify({
-      context: redditData.context ? redditData.context.substring(0, 100) + "..." : "N/A",
-      source: redditData.source,
-      debugLogsCount: redditData.debugLogs?.length 
-    }));
     
-    const isRedditValid = isContextValidAndNotEmpty(redditData.context, redditData.source);
-    console.log('[ChatInterface DEBUG REDDIT VALIDATION] isContextValidAndNotEmpty returned:', isRedditValid, 'for source:', redditData.source, 'and context (start):', redditData.context ? redditData.context.substring(0, 50) + "..." : "N/A");
-    
-    const sourceConditionMet = redditData.source === 'experimental_google_reddit' || redditData.source === 'reddit_direct_search';
-    console.log('[ChatInterface DEBUG REDDIT SOURCE MET] sourceConditionMet (experimental_google_reddit || reddit_direct_search):', sourceConditionMet);
+    console.log('[ChatInterface processAndSendMessage] Reddit Data Received:', { 
+        context: redditData.context ? redditData.context.substring(0, 50) + '...' : 'N/A', 
+        source: redditData.source 
+    });
 
-    if (isRedditValid && sourceConditionMet) {
-        console.log('[ChatInterface DEBUG REDDIT CHOSEN] USING Reddit context for prompt.');
+    const isRedditCtxValid = isContextValidAndNotEmpty(redditData.context, redditData.source);
+    console.log(`[ChatInterface processAndSendMessage] isContextValidAndNotEmpty(redditData) returned: ${isRedditCtxValid}`);
+
+    const isRedditSourceCorrect = redditData.source === 'experimental_google_reddit' || redditData.source === 'reddit_direct_search';
+    console.log(`[ChatInterface processAndSendMessage] Reddit source check (experimental_google_reddit || reddit_direct_search): ${isRedditSourceCorrect}`);
+
+
+    if (isRedditCtxValid && isRedditSourceCorrect) {
+        console.log('[ChatInterface processAndSendMessage] USING Reddit context for prompt.');
         contextForPrompt = redditData.context;
         contextSourceUsed = redditData.source;
-        contextAddedMessageForUI = `ℹ️ I've included some insights from Reddit (${redditData.source}) in my considerations.`;
+        contextAddedMessageForUI = `ℹ️ I've included some insights from Reddit (${redditData.source === 'experimental_google_reddit' ? 'Google Search' : 'Direct Reddit Search'}) in my considerations.`;
         actualContextWasAddedToPrompt = true;
     } else {
-        console.log('[ChatInterface DEBUG REDDIT SKIPPED] NOT using Reddit context for prompt. Reason: isRedditValid:', isRedditValid, 'sourceConditionMet:', sourceConditionMet);
+        console.log(`[ChatInterface processAndSendMessage] NOT using Reddit context. Reason: isRedditCtxValid=${isRedditCtxValid}, isRedditSourceCorrect=${isRedditSourceCorrect}`);
         if (redditData.context && redditData.source !== 'none') {
-            const statusMsg = `ℹ️ Reddit (${redditData.source || 'Fetch Attempt'}): ${isRedditValid ? 'Source type not prioritized or context deemed not suitable.' : 'Context deemed invalid/error.'} Content hint: ${redditData.context.substring(0,70)}...`;
-            if (!messages.some(m => m.text.includes(redditData.context.substring(0,50)))) { // Avoid duplicate status
+            const statusMsg = `ℹ️ Reddit (${redditData.source || 'Fetch Attempt'}): ${isRedditCtxValid ? 'Source type not prioritized or context deemed not suitable.' : 'Context deemed invalid/error.'} Content hint: ${redditData.context.substring(0,70)}...`;
+            if (!messages.some(m => m.text.includes(redditData.context.substring(0,50)))) { 
                  setMessages((prev) => [...prev, {id: `context_status_reddit_skipped_${Date.now()}`, text: statusMsg, sender: 'context-info', timestamp: new Date()}]);
             }
         } else if (redditData.context && redditData.source === 'none') {
@@ -241,53 +246,51 @@ const ChatInterface = () => {
              }
         }
     }
-    console.log(`[ChatInterface DEBUG REDDIT AFTER] actualContextWasAddedToPrompt: ${actualContextWasAddedToPrompt}`);
+    console.log(`[ChatInterface processAndSendMessage] After Reddit check: actualContextWasAddedToPrompt=${actualContextWasAddedToPrompt}, contextSourceUsed=${contextSourceUsed}`);
 
 
     // --- If Reddit context wasn't suitable, try Yelp ---
     if (!actualContextWasAddedToPrompt) {
-      console.log('[ChatInterface DEBUG YELP ATTEMPT] Reddit context not used, trying Yelp.');
+      console.log('[ChatInterface processAndSendMessage] Reddit context not used, trying Yelp.');
       const yelpData = await fetchContextAPI('/api/yelp-context', messageText, 'Yelp');
       const isYelpValid = isContextValidAndNotEmpty(yelpData.context, yelpData.source);
-      console.log('[ChatInterface DEBUG YELP VALIDATION] isContextValidAndNotEmpty for Yelp returned:', isYelpValid, 'for source:', yelpData.source);
       if (isYelpValid && yelpData.source === 'yelp') {
-        console.log('[ChatInterface DEBUG YELP CHOSEN] USING Yelp context for prompt.');
+        console.log('[ChatInterface processAndSendMessage] USING Yelp context for prompt.');
         contextForPrompt = yelpData.context;
         contextSourceUsed = yelpData.source;
         contextAddedMessageForUI = `ℹ️ I've included some information from Yelp in my considerations.`;
         actualContextWasAddedToPrompt = true;
       } else if (yelpData.context && yelpData.source !== 'none') {
-        console.log('[ChatInterface DEBUG YELP SKIPPED] Not using Yelp context. Displaying status.');
+        console.log('[ChatInterface processAndSendMessage] Not using Yelp context. Displaying status.');
         const yelpStatusMessage = `ℹ️ Yelp (${yelpData.source || 'Fetch Attempt'}): ${isYelpValid ? 'Context not suitable.' : 'Context deemed invalid/error.'} Hint: ${yelpData.context.substring(0,70)}...`;
          if (!messages.some(m => m.text.includes(yelpData.context.substring(0,50)))) {
             setMessages((prev) => [...prev, {id: `context_status_yelp_${Date.now()}`, text: yelpStatusMessage, sender: 'context-info', timestamp: new Date()}]);
          }
       }
     }
-    console.log(`[ChatInterface DEBUG YELP AFTER] actualContextWasAddedToPrompt: ${actualContextWasAddedToPrompt}`);
+    console.log(`[ChatInterface processAndSendMessage] After Yelp check: actualContextWasAddedToPrompt=${actualContextWasAddedToPrompt}, contextSourceUsed=${contextSourceUsed}`);
 
     // --- If still no context, try Petfinder ---
     if (!actualContextWasAddedToPrompt) {
-      console.log('[ChatInterface DEBUG PETFINDER ATTEMPT] No Reddit or Yelp context, trying Petfinder.');
+      console.log('[ChatInterface processAndSendMessage] No Reddit or Yelp context, trying Petfinder.');
       const petfinderData = await fetchContextAPI('/api/petfinder-context', messageText, 'Petfinder');
       const isPetfinderValid = isContextValidAndNotEmpty(petfinderData.context, petfinderData.source);
-      console.log('[ChatInterface DEBUG PETFINDER VALIDATION] isContextValidAndNotEmpty for Petfinder returned:', isPetfinderValid, 'for source:', petfinderData.source);
       if (isPetfinderValid && petfinderData.source === 'petfinder') {
-        console.log('[ChatInterface DEBUG PETFINDER CHOSEN] USING Petfinder context for prompt.');
+        console.log('[ChatInterface processAndSendMessage] USING Petfinder context for prompt.');
         contextForPrompt = petfinderData.context;
         contextSourceUsed = petfinderData.source;
         contextAddedMessageForUI = `ℹ️ I've included some information from Petfinder in my considerations.`;
         actualContextWasAddedToPrompt = true;
       } else if (petfinderData.context && petfinderData.source !== 'none') {
-         console.log('[ChatInterface DEBUG PETFINDER SKIPPED] Not using Petfinder context. Displaying status.');
+         console.log('[ChatInterface processAndSendMessage] Not using Petfinder context. Displaying status.');
          const petfinderStatusMessage = `ℹ️ Petfinder (${petfinderData.source || 'Fetch Attempt'}): ${isPetfinderValid ? 'Context not suitable.' : 'Context deemed invalid/error.'} Hint: ${petfinderData.context.substring(0,70)}...`;
          if (!messages.some(m => m.text.includes(petfinderData.context.substring(0,50)))) {
             setMessages((prev) => [...prev, {id: `context_status_petfinder_${Date.now()}`, text: petfinderStatusMessage, sender: 'context-info', timestamp: new Date()}]);
          }
       }
     }
-    console.log(`[ChatInterface DEBUG PETFINDER AFTER] actualContextWasAddedToPrompt: ${actualContextWasAddedToPrompt}`);
-    console.log(`[ChatInterface DEBUG FINAL PRE-PROMPT] contextForPrompt (first 100): ${contextForPrompt ? contextForPrompt.substring(0,100) + "..." : "N/A"}, contextSourceUsed: ${contextSourceUsed}, actualContextWasAddedToPrompt: ${actualContextWasAddedToPrompt}`);
+    console.log(`[ChatInterface processAndSendMessage] After Petfinder check: actualContextWasAddedToPrompt=${actualContextWasAddedToPrompt}, contextSourceUsed=${contextSourceUsed}`);
+    console.log(`[ChatInterface processAndSendMessage] FINAL PRE-PROMPT: contextForPrompt (first 50): ${contextForPrompt ? contextForPrompt.substring(0,50) + "..." : "N/A"}, contextSourceUsed: ${contextSourceUsed}, actualContextWasAddedToPrompt: ${actualContextWasAddedToPrompt}`);
 
 
     setIsFetchingContext(false);
@@ -296,11 +299,13 @@ const ChatInterface = () => {
         if(!messages.some(m => m.text === contextAddedMessageForUI)) { 
             setMessages((prev) => [...prev, {id: `context_added_confirmation_${Date.now()}`, text: contextAddedMessageForUI, sender: 'context-info', timestamp: new Date()}]);
         }
-    } else if (!actualContextWasAddedToPrompt && !messages.some(m => m.sender === 'context-info' && m.text.startsWith("ℹ️") && !m.text.includes('Checking for relevant'))) {
-        // Only show "no external context" if no other specific status messages were shown for failed attempts
-        const showedSpecificStatus = messages.some(m => m.id.startsWith('context_status_') && m.sender === 'context-info');
-        if (!showedSpecificStatus) {
+    } else if (!actualContextWasAddedToPrompt) {
+        const showedSpecificStatus = messages.some(m => m.id.startsWith('context_status_') && m.sender === 'context-info' && !m.id.includes('_none_'));
+        if (!showedSpecificStatus && !messages.some(m => m.id.startsWith('context_status_none_'))) {
+            console.log("[ChatInterface processAndSendMessage] No specific context source used, and no prior specific status messages. Adding 'no external context' message.");
             setMessages((prev) => [...prev, {id: `context_status_none_${Date.now()}`, text: `ℹ️ No specific external context found or used for this query. Proceeding with general knowledge.`, sender: 'context-info', timestamp: new Date()}]);
+        } else {
+             console.log("[ChatInterface processAndSendMessage] No specific context source used, BUT prior specific status messages were shown OR 'no external context' already present. Skipping redundant 'no external context' message.");
         }
     }
 
@@ -319,10 +324,10 @@ const ChatInterface = () => {
         contextHeader = "Consider this from Petfinder shelter data:\n";
       }
       augmentedMessage = `${messageText}\n\n${contextHeader}${cleanedContext}`;
-      console.log(`[ChatInterface DEBUG AUGMENTED MESSAGE] Context from ${contextSourceUsed} was ADDED to the prompt. Header: "${contextHeader.trim()}"`);
+      console.log(`[ChatInterface processAndSendMessage] Context from ${contextSourceUsed} was ADDED to the prompt. Header: "${contextHeader.trim()}"`);
     } else {
-      console.log(`[ChatInterface DEBUG AUGMENTED MESSAGE] No suitable external context was added to prompt. actualContextWasAddedToPrompt = ${actualContextWasAddedToPrompt}, contextSourceUsed = ${contextSourceUsed}`);
-      augmentedMessage = messageText; // Ensure it's just the original message if no context added
+      console.log(`[ChatInterface processAndSendMessage] No suitable external context was added to prompt. actualContextWasAddedToPrompt = ${actualContextWasAddedToPrompt}, contextSourceUsed = ${contextSourceUsed}`);
+      augmentedMessage = messageText; 
     }
 
     console.log('[ChatInterface processAndSendMessage] Sending to /api/chat. Final augmented message (first 500 chars):', JSON.stringify(augmentedMessage.substring(0, 500) + (augmentedMessage.length > 500 ? "..." : "")));
