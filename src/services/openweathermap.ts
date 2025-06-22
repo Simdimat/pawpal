@@ -15,28 +15,13 @@ interface WeatherResponse {
   name: string;
 }
 
-// Mock data to be returned when the API key is not configured
-const mockWeatherData = {
-  main: {
-    temp: 72,
-  },
-  weather: [
-    {
-      main: 'Clear',
-      description: 'clear sky',
-      icon: '01d',
-    },
-  ],
-  name: 'San Diego',
-};
-
-
-export async function fetchWeatherByCoords(lat: number, lon: number) {
+export async function fetchWeatherByCoords(lat: number, lon: number): Promise<WeatherResponse> {
   const API_KEY = process.env.OPENWEATHERMAP_API_KEY;
 
   if (!API_KEY || API_KEY.startsWith('YOUR_')) {
-    console.warn('OpenWeatherMap API key not configured. Returning mock weather data.');
-    return mockWeatherData;
+    const errorMsg = 'OpenWeatherMap API key not configured or is a placeholder.';
+    console.error(errorMsg);
+    throw new Error(errorMsg);
   }
 
   try {
@@ -52,7 +37,6 @@ export async function fetchWeatherByCoords(lat: number, lon: number) {
   } catch (error) {
     console.error('Error fetching weather data from OpenWeatherMap:', error);
     // Fallback to mock data on API error to prevent crashing the component
-    console.warn('Falling back to mock weather data due to API error.');
-    return { ...mockWeatherData, name: `API Error` };
+    throw new Error('Failed to fetch weather data from OpenWeatherMap.');
   }
 }
