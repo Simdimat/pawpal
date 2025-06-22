@@ -45,6 +45,20 @@ const ChatInterface = () => {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
+  const processMessageText = (text: string) => {
+    let processed = text;
+    // ### headers -> <h3> with Tailwind classes for styling
+    processed = processed.replace(/### (.*?)(?:\n|$)/g, '<h3 class="text-lg font-semibold mt-4 mb-2">$1</h3>');
+    // **bold** -> <strong>
+    processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // http links -> <a> with Tailwind classes for styling
+    processed = processed.replace(
+      /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig,
+      '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline break-all">$1</a>'
+    );
+    return processed;
+  };
+
   useEffect(() => {
     const id = getChatUserId();
     setChatUserId(id);
@@ -532,7 +546,7 @@ const ChatInterface = () => {
                 )}
                 <div
                   className={cn(
-                    'max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap',
+                    'max-w-[70%] rounded-lg px-4 py-2 text-sm shadow',
                     message.sender === 'user'
                       ? 'bg-primary text-primary-foreground'
                       : message.sender === 'ai'
@@ -542,7 +556,15 @@ const ChatInterface = () => {
                       : 'bg-orange-50 border border-orange-300 text-orange-700 text-xs' 
                   )}
                 >
-                  {message.text || (message.sender === 'ai' && isLoading && messages.length > 0 && messages[messages.length -1]?.id === message.id && <Loader2 className="h-4 w-4 animate-spin" />)}
+                  {message.sender === 'ai' ? (
+                    message.text ? (
+                      <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: processMessageText(message.text) }} />
+                    ) : (
+                      isLoading && messages.length > 0 && messages[messages.length - 1]?.id === message.id && <Loader2 className="h-4 w-4 animate-spin" />
+                    )
+                  ) : (
+                    <p className="whitespace-pre-wrap">{message.text}</p>
+                  )}
                    <p className="text-xs opacity-70 mt-1 text-right">
                       {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
@@ -590,5 +612,7 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
+
+    
 
     
