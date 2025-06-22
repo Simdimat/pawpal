@@ -197,19 +197,17 @@ const ChatInterface = () => {
     let augmentedMessage = messageText;
     let contextForPrompt: string | null = null;
     let contextSourceUsed: string | null = null;
-    let contextAddedMessageForUI: string | null = null; 
     let actualContextWasAddedToPrompt = false;
 
     setIsFetchingContext(true);
 
-    const redditData = await fetchContextAPI('/api/reddit-context', messageText, 'Reddit');
+    const redditData = await fetchContextAPI('/api/reddit-context', messageText, 'Community Feedback');
     const isRedditCtxValid = isContextValidAndNotEmpty(redditData.context, redditData.source);
     const isRedditSourceCorrect = redditData.source === 'experimental_google_reddit' || redditData.source === 'reddit_direct_search';
 
     if (isRedditCtxValid && isRedditSourceCorrect) {
         contextForPrompt = redditData.context;
         contextSourceUsed = redditData.source;
-        contextAddedMessageForUI = `ℹ️ I've included some insights from Community Feedback in my considerations.`;
         actualContextWasAddedToPrompt = true;
     }
 
@@ -219,7 +217,6 @@ const ChatInterface = () => {
       if (isYelpValid && yelpData.source === 'yelp') {
         contextForPrompt = yelpData.context;
         contextSourceUsed = yelpData.source;
-        contextAddedMessageForUI = `ℹ️ I've included some information from Yelp in my considerations.`;
         actualContextWasAddedToPrompt = true;
       }
     }
@@ -230,20 +227,12 @@ const ChatInterface = () => {
       if (isPetfinderValid && petfinderData.source === 'petfinder') {
         contextForPrompt = petfinderData.context;
         contextSourceUsed = petfinderData.source;
-        contextAddedMessageForUI = `ℹ️ I've included some information from Petfinder in my considerations.`;
         actualContextWasAddedToPrompt = true;
       }
     }
 
 
     setIsFetchingContext(false);
-
-    if (contextAddedMessageForUI && actualContextWasAddedToPrompt) { 
-        if(!messages.some(m => m.text === contextAddedMessageForUI)) { 
-            setMessages((prev) => [...prev, {id: `context_added_confirmation_${Date.now()}`, text: contextAddedMessageForUI, sender: 'context-info', timestamp: new Date()}]);
-        }
-    }
-
 
     if (contextForPrompt && contextSourceUsed && actualContextWasAddedToPrompt) {
       const cleanedContext = contextForPrompt.replace(/\n{2,}/g, '\n').trim();
@@ -489,20 +478,20 @@ const ChatInterface = () => {
                 )}
               </div>
             ))}
+             { (isLoading || isFetchingContext) && messages[messages.length-1]?.sender === 'user' && (
+              <div className="flex items-end gap-2 justify-start mt-4">
+                  <Avatar className="h-8 w-8">
+                      <AvatarImage src="https://placehold.co/40x40.png" alt="PawPal AI" data-ai-hint="robot dog" />
+                      <AvatarFallback><Bot size={18}/></AvatarFallback>
+                  </Avatar>
+                  <div className="max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap bg-card text-card-foreground border">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {(isFetchingContext || isLoading) && <span className="ml-2 text-xs italic">Thinking...</span>}
+                  </div>
+              </div>
+            )}
           </div>
         )}
-        { (isLoading || isFetchingContext) && messages[messages.length-1]?.sender === 'user' && !messages.some(m => m.sender === 'context-info' && m.text.includes('Checking for relevant')) && (
-           <div className="flex items-end gap-2 justify-start mt-4">
-              <Avatar className="h-8 w-8">
-                  <AvatarImage src="https://placehold.co/40x40.png" alt="PawPal AI" data-ai-hint="robot dog" />
-                  <AvatarFallback><Bot size={18}/></AvatarFallback>
-              </Avatar>
-              <div className="max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap bg-card text-card-foreground border">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {isFetchingContext && <span className="ml-2 text-xs italic">Thinking...</span>}
-              </div>
-           </div>
-         )}
       </ScrollArea>
 
       <form onSubmit={handleFormSubmit} className="p-4 flex items-center gap-2 border-t bg-background">
