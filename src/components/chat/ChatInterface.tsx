@@ -51,6 +51,11 @@ const ChatInterface = () => {
     processed = processed.replace(/### (.*?)(?:\n|$)/g, '<h3 class="text-lg font-semibold mt-4 mb-2">$1</h3>');
     // **bold** -> <strong>
     processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // [link text](url) -> <a> tag
+    processed = processed.replace(
+      /\[([^\]]+)\]\(([^)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline break-all">$1</a>'
+    );
     // http links -> <a> with Tailwind classes for styling
     processed = processed.replace(
       /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig,
