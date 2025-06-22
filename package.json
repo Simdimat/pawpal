@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack --port 9003",
-    "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
+    "dev": "next dev",
+    "genkit:dev": "genkit start -- tsx --port 3400 src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build",
     "start": "next start",
