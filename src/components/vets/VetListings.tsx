@@ -33,6 +33,7 @@ const VetListings = ({ locationType }: VetListingsProps) => {
     const fetchVets = async () => {
       setLoading(true);
       setError(null);
+
       const searchTerm = "veterinarians";
       const locationQuery = locationType === 'SD' ? 'San Diego, CA' : 'Tijuana, BC, Mexico';
       const categories = "veterinarians,petservices";

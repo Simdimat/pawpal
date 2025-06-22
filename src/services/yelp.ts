@@ -1,5 +1,6 @@
 
 import axios from 'axios';
+import { mockYelpVets, mockYelpParks, mockYelpBeaches, mockYelpRestaurants } from '@/lib/mock-data';
 
 const YELP_API_URL = 'https://api.yelp.com/v3/businesses/search';
 const API_KEY = process.env.YELP_API_KEY;
@@ -41,9 +42,16 @@ interface YelpSearchResponse {
 }
 
 export async function searchYelp(term: string, location: string, categories?: string, limit: number = 20): Promise<YelpBusiness[]> {
-  if (!API_KEY) {
-    throw new Error('Yelp API key is not configured.');
+  if (!API_KEY || API_KEY.startsWith('YOUR_')) {
+    console.warn(`Yelp API key not configured or is a placeholder. Returning mock data for term: "${term}" and categories: "${categories}".`);
+    if (categories?.includes('veterinarians')) return mockYelpVets.slice(0, limit);
+    if (categories?.includes('dogparks')) return mockYelpParks.slice(0, limit);
+    if (categories?.includes('beaches')) return mockYelpBeaches.slice(0, limit);
+    if (categories?.includes('restaurants')) return mockYelpRestaurants.slice(0, limit);
+    console.warn("No mock data match for categories:", categories);
+    return [];
   }
+
   try {
     const response = await axios.get<YelpSearchResponse>(YELP_API_URL, {
       headers: {

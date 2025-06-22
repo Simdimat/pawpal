@@ -1,5 +1,6 @@
 
 import axios from 'axios';
+import { mockPetfinderOrgs } from '@/lib/mock-data';
 
 const PETFINDER_API_URL = 'https://api.petfinder.com/v2';
 const API_KEY = process.env.PETFINDER_API_KEY;
@@ -19,13 +20,14 @@ let tokenCache: {
   expiresAt: null,
 };
 
-async function getAccessToken(): Promise<string> {
+async function getAccessToken(): Promise<string | null> {
   if (tokenCache.accessToken && tokenCache.expiresAt && Date.now() < tokenCache.expiresAt) {
     return tokenCache.accessToken;
   }
 
-  if (!API_KEY || !API_SECRET) {
-    throw new Error('Petfinder API key or secret is not configured.');
+  if (!API_KEY || !API_SECRET || API_KEY.startsWith('YOUR_') || API_SECRET.startsWith('YOUR_')) {
+    console.warn('Petfinder API key or secret not configured or is a placeholder.');
+    return null;
   }
 
   try {
@@ -82,6 +84,12 @@ interface PetfinderOrganizationsResponse {
 
 export async function fetchOrganizations(location: string = 'San Diego, CA', limit: number = 20): Promise<PetfinderOrganization[]> {
   const accessToken = await getAccessToken();
+
+  if (!accessToken) {
+    console.warn(`Petfinder API key/secret not configured. Returning mock data for location: "${location}".`);
+    return mockPetfinderOrgs.slice(0, limit);
+  }
+
   try {
     const response = await axios.get<PetfinderOrganizationsResponse>(`${PETFINDER_API_URL}/organizations`, {
       headers: {
@@ -109,7 +117,6 @@ export async function fetchOrganizations(location: string = 'San Diego, CA', lim
 
 // Example function for chat context - might fetch animals from specific orgs or general animals
 export async function getPetfinderContextForChat(topic: string, location: string = 'San Diego, CA'): Promise<string> {
-  const accessToken = await getAccessToken();
   let context = "";
   try {
     if (topic.includes("shelter") || topic.includes("volunteer")) {
