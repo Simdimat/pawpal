@@ -7,6 +7,13 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  allowedDevOrigins: [
+    'https://3001-firebase-studio-1749788380874.cluster-t23zgfo255e32uuvburngnfnn4.cloudworkstations.dev',
+    'https://3002-firebase-studio-1749788380874.cluster-t23zgfo255e32uuvburngnfnn4.cloudworkstations.dev'
+    ,'https://3003-firebase-studio-1749788380874.cluster-t23zgfo255e32uuvburngnfnn4.cloudworkstations.dev',
+    'https://3004-firebase-studio-1749788380874.cluster-t23zgfo255e32uuvburngnfnn4.cloudworkstations.dev',
+    'https://3005-firebase-studio-1749788380874.cluster-t23zgfo255e32uuvburngnfnn4.cloudworkstations.dev'
+  ],
   eslint: {
     ignoreDuringBuilds: true,
   },

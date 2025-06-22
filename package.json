@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "genkit:dev": "genkit start -- tsx --port 3400 src/ai/dev.ts",
+    "dev": "next dev --port 3002",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "next build",
     "start": "next start",
