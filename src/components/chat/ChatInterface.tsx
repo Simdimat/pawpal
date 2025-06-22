@@ -51,16 +51,21 @@ const ChatInterface = () => {
     processed = processed.replace(/### (.*?)(?:\n|$)/g, '<h3 class="text-lg font-semibold mt-4 mb-2">$1</h3>');
     // **bold** -> <strong>
     processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    // [link text](url) -> <a> tag
+    
+    // Process markdown-style links first: [text](url)
     processed = processed.replace(
-      /\[([^\]]+)\]\(([^)]+)\)/g,
+      /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
       '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline break-all">$1</a>'
     );
-    // http links -> <a> with Tailwind classes for styling
+    
+    // Process raw http links, but only if they are not already inside an href attribute
+    // This regex looks for a URL but uses a negative lookbehind (?<!) to ensure it's not preceded by `href="` or `href='`.
+    // This prevents re-linking URLs that are already part of an anchor tag.
     processed = processed.replace(
-      /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig,
+      /(?<!href=")(?<!href=')\b(https?:\/\/[^\s<]+[^\s<.,!?()])/g,
       '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-primary hover:underline break-all">$1</a>'
     );
+    
     return processed;
   };
 
@@ -188,13 +193,13 @@ const ChatInterface = () => {
       console.log(`[ChatInterface] Data from ${apiEndpoint} (${contextName}):`, {context: contextPreview, source: data.source, debugLogsCount: data.debugLogs?.length});
 
 
-      if (data.debugLogs && data.debugLogs.length > 0) {
-        data.debugLogs.forEach((log, index) => {
-            if (!messages.some(m => m.text.includes(log.substring(0,50)))) { 
-                 setMessages((prev) => [...prev, {id: `debug_${contextName}_${Date.now()}_${index}`, text: `🔧 DEBUG (${contextName}): ${log}`, sender: 'debug-info', timestamp: new Date()}]);
-            }
-        });
-      }
+      // if (data.debugLogs && data.debugLogs.length > 0) {
+      //   data.debugLogs.forEach((log, index) => {
+      //       if (!messages.some(m => m.text.includes(log.substring(0,50)))) { 
+      //            setMessages((prev) => [...prev, {id: `debug_${contextName}_${Date.now()}_${index}`, text: `🔧 DEBUG (${contextName}): ${log}`, sender: 'debug-info', timestamp: new Date()}]);
+      //       }
+      //   });
+      // }
       return data;
     } catch (error) {
       console.error(`[ChatInterface] Error fetching ${contextName} context:`, error);
@@ -617,7 +622,3 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
-
-    
-
-    
