@@ -36,19 +36,11 @@ export default function HomePage() {
               <span className="text-primary">PawPal SD</span>
             </h1>
             <p className="mt-4 max-w-3xl mx-auto text-lg text-foreground/80 md:text-xl">
-              This site is your all-in-one resource for pet life in San Diego! Use the interactive <a href="#map-section" className="text-primary hover:underline font-semibold">Pet Map</a> to find parks and vets, consult the <a href="#emergency-section" className="text-primary hover:underline font-semibold">Emergency Guide</a> for urgent situations, or ask our <a href="#" onClick={() => setIsChatOpen(true)} className="text-primary hover:underline font-semibold">AI Assistant</a> for quick answers. Your feedback shapes our development, so please share your ideas below!
+              This site is your all-in-one resource for pet life in San Diego! Use the interactive <a href="#map-section" className="text-primary hover:underline font-semibold">Pet Map</a> to find parks and vets, explore the <a href="#vets-section" className="text-primary hover:underline font-semibold">Veterinarian Information Hub</a>, find <a href="#dog-day-out-section" className="text-primary hover:underline font-semibold">Dog Day Out &amp; Volunteer</a> opportunities, or ask our <a href="#" onClick={() => setIsChatOpen(true)} className="text-primary hover:underline font-semibold">AI Assistant</a> for quick answers. Your feedback shapes our development, so please share your ideas below!
             </p>
           </section>
 
           <FeatureRequests />
-
-          <section className="w-full">
-            <div className="container px-0">
-              <h2 className="text-3xl font-headline font-bold tracking-tight text-center text-foreground mb-12">
-                Explore PawPal SD Features
-              </h2>
-            </div>
-          </section>
 
           <section id="map-section" className="scroll-m-20 py-8">
             <Card className="shadow-lg">

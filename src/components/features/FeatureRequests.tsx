@@ -15,15 +15,15 @@ interface FeatureRequest {
 }
 
 const placeholderRequests: FeatureRequest[] = [
-  { _id: 'placeholder1', text: 'Add pet profiles for quick vet info', votes: 5 },
-  { _id: 'placeholder2', text: 'Offer training tips from experts', votes: 4 },
-  { _id: 'placeholder3', text: 'Organize local dog meetups', votes: 3 },
+  { _id: 'placeholder1', text: 'Basic dark mode toggle', votes: 5 },
+  { _id: 'placeholder2', text: 'Daily dog fact / tip', votes: 4 },
+  { _id: 'placeholder3', text: 'Simple pet care checklist', votes: 3 },
 ];
 
 const inProgressFeatures = [
-  "Full login and password support",
+  "Full login and password feature",
+  "Improved mobile layout",
   "Enhanced map filters",
-  "More AI-powered tips",
 ];
 
 const FeatureRequests = () => {
@@ -83,7 +83,6 @@ const FeatureRequests = () => {
 
     const newVotedSet = new Set(votedRequests);
     newVotedSet.add(id);
-    setVotedRequests(newVotedSet);
     sessionStorage.setItem('pawpal_voted_requests', JSON.stringify(Array.from(newVotedSet)));
 
     setRequests(prev =>
@@ -150,13 +149,17 @@ const FeatureRequests = () => {
           <div className="space-y-4">
             <div className="text-center">
                <h3 className="text-2xl font-bold text-primary">Feature Requests</h3>
-               <p className="text-muted-foreground text-sm">Vote or suggest new ideas for PawPal.</p>
+                <p className="text-muted-foreground text-sm">
+                  Vote Paws Up for any new features, updates, or improvements you’d like to see here.
+                  <br />
+                  Or suggest your own. They’ll be listed below after a quick review!
+                </p>
             </div>
             
             <form onSubmit={handleSubmitSuggestion} className="flex items-center gap-2">
               <Input
                 type="text"
-                placeholder="Suggest a feature..."
+                placeholder="Suggest your idea..."
                 value={newSuggestion}
                 onChange={e => setNewSuggestion(e.target.value)}
                 disabled={isSubmitting}
