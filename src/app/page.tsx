@@ -13,6 +13,7 @@ import PetMapDisplay from '@/components/map/PetMapDisplay';
 import EmergencyFlows from '@/components/emergency/EmergencyFlows';
 import VetListings from '@/components/vets/VetListings';
 import ShelterListings from '@/components/shelters/ShelterListings';
+import FeatureRequests from '@/components/features/FeatureRequests';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from '@/lib/utils';
 
@@ -29,16 +30,16 @@ export default function HomePage() {
       <div className="w-full md:w-3/4 pt-8">
         {/* Main content will naturally scroll if taller than viewport */}
         <main className="w-full space-y-12">
-          <section className="w-full py-12 md:py-20 lg:py-24 bg-gradient-to-br from-primary/10 via-background to-accent/10 rounded-xl shadow-lg">
-            <div className="container px-4 md:px-6 text-center">
-              <h1 className="text-4xl font-headline font-bold tracking-tight sm:text-5xl md:text-6xl text-foreground">
-                Welcome to <span className="text-primary">PawPal SD</span>
-              </h1>
-              <p className="mt-4 max-w-2xl mx-auto text-lg text-foreground/80 md:text-xl">
-                Your AI-powered companion for navigating pet life in San Diego. Find everything you need, from vets and parks to emergency advice, all in one place.
-              </p>
-            </div>
+          <section className="w-full py-12 text-center">
+            <h1 className="text-4xl font-headline font-bold tracking-tight sm:text-5xl md:text-6xl text-primary">
+              Welcome to PawPal SD
+            </h1>
+            <p className="mt-4 max-w-3xl mx-auto text-lg text-foreground/80 md:text-xl">
+              This site is your all-in-one resource for pet life in San Diego! Use the interactive <a href="#map-section" className="text-primary hover:underline font-semibold">Pet Map</a> to find parks and vets, consult the <a href="#emergency-section" className="text-primary hover:underline font-semibold">Emergency Guide</a> for urgent situations, or ask our <a href="#" onClick={() => setIsChatOpen(true)} className="text-primary hover:underline font-semibold">AI Assistant</a> for quick answers. Your feedback shapes our development, so please share your ideas below!
+            </p>
           </section>
+
+          <FeatureRequests />
 
           <section className="w-full">
             <div className="container px-0">
