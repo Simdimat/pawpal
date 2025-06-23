@@ -77,14 +77,17 @@ const FeatureRequests = () => {
       const newVotedSet = new Set(votedRequests);
       newVotedSet.add(id);
       setVotedRequests(newVotedSet);
+      sessionStorage.setItem('pawpal_voted_requests', JSON.stringify(Array.from(newVotedSet)));
       return;
     }
 
 
     const newVotedSet = new Set(votedRequests);
     newVotedSet.add(id);
+    setVotedRequests(newVotedSet);
     sessionStorage.setItem('pawpal_voted_requests', JSON.stringify(Array.from(newVotedSet)));
 
+    // Optimistic UI update
     setRequests(prev =>
       prev.map(r => (r._id === id ? { ...r, votes: r.votes + 1 } : r)).sort((a, b) => b.votes - a.votes)
     );
@@ -97,9 +100,14 @@ const FeatureRequests = () => {
       });
        if (!res.ok) throw new Error('Server error, vote not saved.');
     } catch (e) {
+      // Revert optimistic update on failure
       setRequests(prev =>
         prev.map(r => (r._id === id ? { ...r, votes: r.votes - 1 } : r)).sort((a, b) => b.votes - a.votes)
       );
+      const revertedVotedSet = new Set(votedRequests);
+      revertedVotedSet.delete(id);
+      setVotedRequests(revertedVotedSet);
+      sessionStorage.setItem('pawpal_voted_requests', JSON.stringify(Array.from(revertedVotedSet)));
       toast({ title: "Vote Failed", description: "Could not save your vote. Please try again.", variant: 'destructive' });
     }
   };
@@ -150,9 +158,9 @@ const FeatureRequests = () => {
             <div className="text-center">
                <h3 className="text-2xl font-bold text-primary">Feature Requests</h3>
                 <p className="text-muted-foreground text-sm">
-                  Vote Paws Up for any new features, updates, or improvements you’d like to see here.
+                  Vote <b>Paws Up</b> for any new features, updates, or improvements you’d like to see here.
                   <br />
-                  Or suggest your own. They’ll be listed below after a quick review!
+                  See your own idea below after a quick review!
                 </p>
             </div>
             
