@@ -18,7 +18,6 @@ interface Message {
 }
 
 const suggestedQuestionsList = [
-  "My dog got sprayed by a skunk! What do I do?",
   "Where's a good dog beach in San Diego?",
   "Any recommendations for Tijuana vet care?",
   "Find shelters for dog walking.",
