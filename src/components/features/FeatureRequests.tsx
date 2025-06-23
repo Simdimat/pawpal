@@ -119,7 +119,7 @@ const FeatureRequests = () => {
         <CardContent className="p-8 grid md:grid-cols-2 gap-x-12 gap-y-8">
           
           <div className="space-y-4">
-            <h3 className="text-center text-2xl font-bold text-primary">Currently In Progress & Coming Soon</h3>
+            <h3 className="text-center text-2xl font-bold text-foreground">Currently In Progress & Coming Soon</h3>
             <ul className="space-y-2 text-foreground/90 pl-4">
               {inProgressFeatures.map((feature, index) => (
                 <li key={index} className="flex items-center gap-3">
@@ -132,7 +132,7 @@ const FeatureRequests = () => {
 
           <div className="space-y-4">
             <div className="text-center">
-               <h3 className="text-2xl font-bold text-primary">Feature Requests</h3>
+               <h3 className="text-2xl font-bold text-foreground">Feature Requests</h3>
                 <p className="text-muted-foreground text-sm">
                   Vote <b>Paws Up</b> for any new features, updates, or improvements you’d like to see here.
                   <br />

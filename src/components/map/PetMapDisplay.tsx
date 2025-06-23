@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Filter, Search, AlertTriangle, Loader2, ExternalLink, Eye, ChevronDown, Pin } from "lucide-react";
+import { Filter, Search, AlertTriangle, Loader2, ExternalLink, Eye, Pin } from "lucide-react";
 import Image from "next/image";
 import type { YelpBusiness } from '@/services/yelp';
 import type { PetfinderOrganization } from '@/services/petfinder';
@@ -224,8 +224,6 @@ export default function PetMapDisplay() {
     setViewState(evt.viewState);
   }, []);
 
-  const showScrollIndicator = !isLoading && !error && displayedLocations.length > 2;
-
   if (!clientMounted) {
     return <MapLoader message="Initializing map components..." />;
   }
@@ -345,20 +343,20 @@ export default function PetMapDisplay() {
             {error && <div className="mt-4 text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
             
             {!isLoading && !error && displayedLocations.length > 0 ? (
-              <>
-                <ScrollArea className="h-[200px] md:h-[calc(100vh-650px)] min-h-[200px]"> 
-                  <div className="space-y-3 pr-3">
-                    {displayedLocations.map(loc => (
-                      <div key={loc.id} className="p-3 border rounded-md bg-card hover:shadow-md transition-shadow">
-                        <Image
-                          src={loc.imageUrl || `https://placehold.co/300x150.png?text=${encodeURIComponent(loc.name)}`}
-                          alt={loc.name}
-                          width={300}
-                          height={150}
-                          className="w-full h-24 object-cover rounded-md mb-2"
-                          data-ai-hint={loc.dataAiHint || loc.type.toLowerCase()}
-                          unoptimized={loc.imageUrl?.includes('cloudfront.net') || loc.imageUrl?.includes('yelpcdn.com')}
-                        />
+              <ScrollArea className="h-[200px] md:h-[calc(100vh-650px)] min-h-[200px]"> 
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 pr-2">
+                  {displayedLocations.map(loc => (
+                    <div key={loc.id} className="p-3 border rounded-md bg-card hover:shadow-md transition-shadow flex flex-col">
+                      <Image
+                        src={loc.imageUrl || `https://placehold.co/300x150.png?text=${encodeURIComponent(loc.name)}`}
+                        alt={loc.name}
+                        width={300}
+                        height={150}
+                        className="w-full h-24 object-cover rounded-md mb-2"
+                        data-ai-hint={loc.dataAiHint || loc.type.toLowerCase()}
+                        unoptimized={loc.imageUrl?.includes('cloudfront.net') || loc.imageUrl?.includes('yelpcdn.com')}
+                      />
+                      <div className="flex-grow">
                         <h4 className="font-semibold text-md text-primary">{loc.name}</h4>
                         <p className="text-sm text-muted-foreground">{loc.type} - {loc.address}</p>
                         {loc.websiteUrl && (
@@ -368,31 +366,25 @@ export default function PetMapDisplay() {
                             </a>
                           </Button>
                         )}
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="mt-2 w-full text-xs"
-                          onClick={() => {
-                            if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
-                              flyToLocation(loc.latitude, loc.longitude);
-                              setTimeout(() => setSelectedLocationPopup(loc), 50);
-                            }
-                          }}
-                          disabled={!(typeof loc.latitude === 'number' && typeof loc.longitude === 'number') || !mapReady}
-                        >
-                          <Eye className="mr-2 h-3 w-3" /> View on Map
-                        </Button>
                       </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-                {showScrollIndicator && (
-                  <div className="text-center text-xs text-muted-foreground pt-2">
-                    <ChevronDown className="h-4 w-4 inline-block animate-bounce" />
-                    <span className="ml-1">Scroll for more</span>
-                  </div>
-                )}
-              </>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="mt-2 w-full text-xs"
+                        onClick={() => {
+                          if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+                            flyToLocation(loc.latitude, loc.longitude);
+                            setTimeout(() => setSelectedLocationPopup(loc), 50);
+                          }
+                        }}
+                        disabled={!(typeof loc.latitude === 'number' && typeof loc.longitude === 'number') || !mapReady}
+                      >
+                        <Eye className="mr-2 h-3 w-3" /> View on Map
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
             ) : (
               !isLoading && !error && <p className="text-muted-foreground text-center py-4">No locations to display. Try adjusting your search or filters.</p>
             )}
