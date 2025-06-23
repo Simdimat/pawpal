@@ -227,7 +227,7 @@ export default function PetMapDisplay() {
 
   const handleScroll = (direction: 'up' | 'down') => {
     if (scrollAreaRef.current) {
-      const viewport = scrollAreaRef.current.children[0] as HTMLElement;
+      const viewport = scrollAreaRef.current.querySelector<HTMLElement>('[data-radix-scroll-area-viewport]');
       if (viewport) {
         const scrollAmount = direction === 'up' ? -300 : 300;
         viewport.scrollTo({
