@@ -14,12 +14,6 @@ interface FeatureRequest {
   votes: number;
 }
 
-const placeholderRequests: FeatureRequest[] = [
-  { _id: 'placeholder1', text: 'Basic dark mode toggle', votes: 5 },
-  { _id: 'placeholder2', text: 'Daily dog fact / tip', votes: 4 },
-  { _id: 'placeholder3', text: 'Simple pet care checklist', votes: 3 },
-];
-
 const inProgressFeatures = [
   "Full login and password feature",
   "Improved mobile layout",
@@ -48,16 +42,11 @@ const FeatureRequests = () => {
     setError(null);
     try {
       const res = await fetch('/api/features');
-      if (!res.ok) throw new Error('Failed to fetch requests. Showing placeholders.');
+      if (!res.ok) throw new Error('Failed to fetch requests. Please try again.');
       const data: FeatureRequest[] = await res.json();
-      if (data.length === 0) {
-        setRequests(placeholderRequests);
-      } else {
-        setRequests(data);
-      }
+      setRequests(data);
     } catch (e: any) {
       setError(e.message);
-      setRequests(placeholderRequests); // On error, show placeholders
     } finally {
       setIsLoading(false);
     }
@@ -68,19 +57,6 @@ const FeatureRequests = () => {
       toast({ title: "Already Voted!", description: "You can only give one 'Paws Up' per feature." });
       return;
     }
-     if (id.startsWith('placeholder')) {
-      toast({ title: "Demo Vote!", description: "This is a placeholder. Your vote isn't saved, but we appreciate the enthusiasm!" });
-       // Optimistic UI update for demo
-       setRequests(prev =>
-        prev.map(r => (r._id === id ? { ...r, votes: r.votes + 1 } : r)).sort((a, b) => b.votes - a.votes)
-      );
-      const newVotedSet = new Set(votedRequests);
-      newVotedSet.add(id);
-      setVotedRequests(newVotedSet);
-      sessionStorage.setItem('pawpal_voted_requests', JSON.stringify(Array.from(newVotedSet)));
-      return;
-    }
-
 
     const newVotedSet = new Set(votedRequests);
     newVotedSet.add(id);
@@ -183,7 +159,7 @@ const FeatureRequests = () => {
               {isLoading && <div className="flex justify-center items-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>}
               {error && !isLoading && <div className="text-red-500 text-sm flex items-center gap-2 p-2"><AlertCircle size={16} /> {error}</div>}
               
-              {!isLoading && requests.length > 0 && (
+              {!isLoading && !error && requests.length > 0 && (
                 <ul className="space-y-2">
                   {requests.map(req => (
                     <li key={req._id} className="flex items-center justify-between bg-background/50 p-3 border-2 border-dashed border-primary/30 rounded-lg">
@@ -202,6 +178,9 @@ const FeatureRequests = () => {
                     </li>
                   ))}
                 </ul>
+              )}
+               {!isLoading && !error && requests.length === 0 && (
+                <p className="text-center text-muted-foreground text-sm py-4">No feature requests yet. Be the first to suggest one!</p>
               )}
             </div>
           </div>
