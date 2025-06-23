@@ -229,168 +229,168 @@ export default function PetMapDisplay() {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 min-h-[600px]">
-      <Card className="md:col-span-1 shadow-md flex flex-col">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 font-headline"><Filter className="w-5 h-5 text-primary"/> Filters & Search</CardTitle>
-        </CardHeader>
-        <CardContent className="flex-grow flex flex-col">
-          <form onSubmit={handleSearchSubmit} className="space-y-4 mb-4">
-            <div className="relative">
-              <Input
-                placeholder="Search by name or address..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pr-10"
-                aria-label="Search locations"
-              />
-              <Button type="submit" size="icon" variant="ghost" className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8">
-                <Search className="w-4 h-4"/>
-              </Button>
-            </div>
-          </form>
-          <Label className="font-semibold mb-2 block">Categories:</Label>
-          <ScrollArea className="flex-grow pr-3">
-            <div className="space-y-2">
-            {filterOptions.map(opt => (
-              <div key={opt.id} className="flex items-center space-x-2">
-                <Checkbox
-                  id={`filter-${opt.id}`}
-                  checked={activeFilters.has(opt.type as PlaceType)}
-                  onCheckedChange={(checked) => handleFilterChange(opt.type as PlaceType, !!checked)}
-                  aria-labelledby={`label-filter-${opt.id}`}
-                />
-                <Label htmlFor={`filter-${opt.id}`} id={`label-filter-${opt.id}`} className="text-sm font-normal">{opt.label}</Label>
-              </div>
-            ))}
-            </div>
-          </ScrollArea>
-        </CardContent>
-      </Card>
+    <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="md:col-span-1 shadow-md flex flex-col">
+                <CardHeader>
+                <CardTitle className="flex items-center gap-2 font-headline"><Filter className="w-5 h-5 text-primary"/> Filters & Search</CardTitle>
+                </CardHeader>
+                <CardContent className="flex-grow flex flex-col">
+                <form onSubmit={handleSearchSubmit} className="space-y-4 mb-4">
+                    <div className="relative">
+                    <Input
+                        placeholder="Search by name or address..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pr-10"
+                        aria-label="Search locations"
+                    />
+                    <Button type="submit" size="icon" variant="ghost" className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8">
+                        <Search className="w-4 h-4"/>
+                    </Button>
+                    </div>
+                </form>
+                <Label className="font-semibold mb-2 block">Categories:</Label>
+                <ScrollArea className="flex-grow pr-3">
+                    <div className="space-y-2">
+                    {filterOptions.map(opt => (
+                    <div key={opt.id} className="flex items-center space-x-2">
+                        <Checkbox
+                        id={`filter-${opt.id}`}
+                        checked={activeFilters.has(opt.type as PlaceType)}
+                        onCheckedChange={(checked) => handleFilterChange(opt.type as PlaceType, !!checked)}
+                        aria-labelledby={`label-filter-${opt.id}`}
+                        />
+                        <Label htmlFor={`filter-${opt.id}`} id={`label-filter-${opt.id}`} className="text-sm font-normal">{opt.label}</Label>
+                    </div>
+                    ))}
+                    </div>
+                </ScrollArea>
+                </CardContent>
+            </Card>
 
-      <div className="md:col-span-2 space-y-4">
-        <div
-           key={mapKey} 
-           className="h-[400px] md:h-[400px] bg-muted rounded-lg shadow-inner flex items-center justify-center relative overflow-hidden border"
-        >
-          {clientMounted ? ( 
-            <MapGL
-              ref={mapRef}
-              mapLib={maplibregl} 
-              initialViewState={SAN_DIEGO_INITIAL_VIEW_STATE}
-              style={{width: '100%', height: '100%', borderRadius: '0.5rem'}}
-              mapStyle={MAP_STYLE}
-              onLoad={handleMapLoad}
-              onMove={onMapMove}
+            <div
+                key={mapKey} 
+                className="md:col-span-2 h-[500px] bg-muted rounded-lg shadow-inner flex items-center justify-center relative overflow-hidden border"
             >
-              {mapReady && displayedLocations.map(loc => {
-                if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
-                  return (
-                    <MarkerGL
-                      key={loc.id}
-                      longitude={loc.longitude}
-                      latitude={loc.latitude}
-                      onClick={(e) => {
-                        e.originalEvent?.stopPropagation(); 
-                        handleMarkerClick(loc);
-                      }}
+                {clientMounted ? ( 
+                    <MapGL
+                    ref={mapRef}
+                    mapLib={maplibregl} 
+                    initialViewState={SAN_DIEGO_INITIAL_VIEW_STATE}
+                    style={{width: '100%', height: '100%', borderRadius: '0.5rem'}}
+                    mapStyle={MAP_STYLE}
+                    onLoad={handleMapLoad}
+                    onMove={onMapMove}
                     >
-                      <Pin className="w-6 h-6 text-destructive fill-destructive/70 cursor-pointer" />
-                    </MarkerGL>
-                  );
-                }
-                return null;
-              })}
+                    {mapReady && displayedLocations.map(loc => {
+                        if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+                        return (
+                            <MarkerGL
+                            key={loc.id}
+                            longitude={loc.longitude}
+                            latitude={loc.latitude}
+                            onClick={(e) => {
+                                e.originalEvent?.stopPropagation(); 
+                                handleMarkerClick(loc);
+                            }}
+                            >
+                            <Pin className="w-6 h-6 text-destructive fill-destructive/70 cursor-pointer" />
+                            </MarkerGL>
+                        );
+                        }
+                        return null;
+                    })}
 
-              {selectedLocationPopup && typeof selectedLocationPopup.latitude === 'number' && typeof selectedLocationPopup.longitude === 'number' && (
-                <PopupGL
-                  longitude={selectedLocationPopup.longitude}
-                  latitude={selectedLocationPopup.latitude}
-                  onClose={() => setSelectedLocationPopup(null)}
-                  closeButton={true}
-                  closeOnClick={false}
-                  anchor="bottom"
-                  offset={25} 
-                >
-                  <div className="text-sm w-48 p-1">
-                    <h3 className="font-semibold text-md mb-1 truncate" title={selectedLocationPopup.name}>{selectedLocationPopup.name}</h3>
-                    {selectedLocationPopup.address && <p className="text-xs text-muted-foreground mb-1 truncate" title={selectedLocationPopup.address}>{selectedLocationPopup.address}</p>}
-                    {selectedLocationPopup.websiteUrl && (
-                      <a
-                        href={selectedLocationPopup.websiteUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline text-xs flex items-center truncate"
-                      >
-                        Visit Website <ExternalLink className="ml-1 h-3 w-3 flex-shrink-0" />
-                      </a>
+                    {selectedLocationPopup && typeof selectedLocationPopup.latitude === 'number' && typeof selectedLocationPopup.longitude === 'number' && (
+                        <PopupGL
+                        longitude={selectedLocationPopup.longitude}
+                        latitude={selectedLocationPopup.latitude}
+                        onClose={() => setSelectedLocationPopup(null)}
+                        closeButton={true}
+                        closeOnClick={false}
+                        anchor="bottom"
+                        offset={25} 
+                        >
+                        <div className="text-sm w-48 p-1">
+                            <h3 className="font-semibold text-md mb-1 truncate" title={selectedLocationPopup.name}>{selectedLocationPopup.name}</h3>
+                            {selectedLocationPopup.address && <p className="text-xs text-muted-foreground mb-1 truncate" title={selectedLocationPopup.address}>{selectedLocationPopup.address}</p>}
+                            {selectedLocationPopup.websiteUrl && (
+                            <a
+                                href={selectedLocationPopup.websiteUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline text-xs flex items-center truncate"
+                            >
+                                Visit Website <ExternalLink className="ml-1 h-3 w-3 flex-shrink-0" />
+                            </a>
+                            )}
+                        </div>
+                        </PopupGL>
                     )}
-                  </div>
-                </PopupGL>
-              )}
-            </MapGL>
-          ) : (
-            <MapLoader message="Initializing map components..." />
-          )}
+                    </MapGL>
+                ) : (
+                    <MapLoader message="Initializing map components..." />
+                )}
+            </div>
         </div>
 
         <Card className="shadow-md">
-          <CardHeader>
-            <CardTitle className="font-headline">Matching Locations</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading && <div className="flex items-center justify-center text-sm text-muted-foreground py-4"><Loader2 className="w-5 h-5 mr-2 animate-spin"/>Loading locations...</div>}
-            {error && <div className="mt-4 text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
-            
-            {!isLoading && !error && displayedLocations.length > 0 ? (
-              <ScrollArea className="h-[200px] md:h-[calc(100vh-650px)] min-h-[200px]"> 
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 pr-2">
-                  {displayedLocations.map(loc => (
-                    <div key={loc.id} className="p-3 border rounded-md bg-card hover:shadow-md transition-shadow flex flex-col">
-                      <Image
-                        src={loc.imageUrl || `https://placehold.co/300x150.png?text=${encodeURIComponent(loc.name)}`}
-                        alt={loc.name}
-                        width={300}
-                        height={150}
-                        className="w-full h-24 object-cover rounded-md mb-2"
-                        data-ai-hint={loc.dataAiHint || loc.type.toLowerCase()}
-                        unoptimized={loc.imageUrl?.includes('cloudfront.net') || loc.imageUrl?.includes('yelpcdn.com')}
-                      />
-                      <div className="flex-grow">
-                        <h4 className="font-semibold text-md text-primary">{loc.name}</h4>
-                        <p className="text-sm text-muted-foreground">{loc.type} - {loc.address}</p>
-                        {loc.websiteUrl && (
-                          <Button asChild variant="link" size="sm" className="mt-1 px-0 text-xs">
-                            <a href={loc.websiteUrl} target="_blank" rel="noopener noreferrer">
-                              Visit Website <ExternalLink className="ml-1 h-3 w-3" />
-                            </a>
-                          </Button>
-                        )}
-                      </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="mt-2 w-full text-xs"
-                        onClick={() => {
-                          if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
-                            flyToLocation(loc.latitude, loc.longitude);
-                            setTimeout(() => setSelectedLocationPopup(loc), 50);
-                          }
-                        }}
-                        disabled={!(typeof loc.latitude === 'number' && typeof loc.longitude === 'number') || !mapReady}
-                      >
-                        <Eye className="mr-2 h-3 w-3" /> View on Map
-                      </Button>
+            <CardHeader>
+                <CardTitle className="font-headline">Matching Locations</CardTitle>
+            </CardHeader>
+            <CardContent>
+                {isLoading && <div className="flex items-center justify-center text-sm text-muted-foreground py-4"><Loader2 className="w-5 h-5 mr-2 animate-spin"/>Loading locations...</div>}
+                {error && <div className="mt-4 text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
+                
+                {!isLoading && !error && displayedLocations.length > 0 ? (
+                <ScrollArea className="h-[300px]"> 
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pr-2">
+                    {displayedLocations.map(loc => (
+                        <div key={loc.id} className="p-3 border rounded-md bg-card hover:shadow-md transition-shadow flex flex-col">
+                        <Image
+                            src={loc.imageUrl || `https://placehold.co/300x150.png?text=${encodeURIComponent(loc.name)}`}
+                            alt={loc.name}
+                            width={300}
+                            height={150}
+                            className="w-full h-24 object-cover rounded-md mb-2"
+                            data-ai-hint={loc.dataAiHint || loc.type.toLowerCase()}
+                            unoptimized={loc.imageUrl?.includes('cloudfront.net') || loc.imageUrl?.includes('yelpcdn.com')}
+                        />
+                        <div className="flex-grow">
+                            <h4 className="font-semibold text-md text-primary">{loc.name}</h4>
+                            <p className="text-sm text-muted-foreground">{loc.type} - {loc.address}</p>
+                            {loc.websiteUrl && (
+                            <Button asChild variant="link" size="sm" className="mt-1 px-0 text-xs">
+                                <a href={loc.websiteUrl} target="_blank" rel="noopener noreferrer">
+                                Visit Website <ExternalLink className="ml-1 h-3 w-3" />
+                                </a>
+                            </Button>
+                            )}
+                        </div>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="mt-2 w-full text-xs"
+                            onClick={() => {
+                            if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+                                flyToLocation(loc.latitude, loc.longitude);
+                                setTimeout(() => setSelectedLocationPopup(loc), 50);
+                            }
+                            }}
+                            disabled={!(typeof loc.latitude === 'number' && typeof loc.longitude === 'number') || !mapReady}
+                        >
+                            <Eye className="mr-2 h-3 w-3" /> View on Map
+                        </Button>
+                        </div>
+                    ))}
                     </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            ) : (
-              !isLoading && !error && <p className="text-muted-foreground text-center py-4">No locations to display. Try adjusting your search or filters.</p>
-            )}
-          </CardContent>
+                </ScrollArea>
+                ) : (
+                !isLoading && !error && <p className="text-muted-foreground text-center py-4">No locations to display. Try adjusting your search or filters.</p>
+                )}
+            </CardContent>
         </Card>
-      </div>
     </div>
   );
 }

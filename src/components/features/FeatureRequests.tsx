@@ -20,6 +20,12 @@ const inProgressFeatures = [
   "Enhanced map filters",
 ];
 
+const initialFeatures = [
+  { text: 'Basic dark mode toggle', votes: 5, createdAt: new Date() },
+  { text: 'Daily dog fact / tip', votes: 4, createdAt: new Date() },
+  { text: 'Simple pet care checklist', votes: 3, createdAt: new Date() },
+];
+
 const FeatureRequests = () => {
   const [requests, setRequests] = useState<FeatureRequest[]>([]);
   const [newSuggestion, setNewSuggestion] = useState('');
@@ -44,7 +50,15 @@ const FeatureRequests = () => {
       const res = await fetch('/api/features');
       if (!res.ok) throw new Error('Failed to fetch requests. Please try again.');
       const data: FeatureRequest[] = await res.json();
-      setRequests(data);
+      
+      // If the database returns empty, use initial features as a fallback for display
+      if (data.length === 0) {
+          const fallbackData = initialFeatures.map((f, i) => ({ ...f, _id: `fallback-${i}`}));
+          setRequests(fallbackData);
+      } else {
+          setRequests(data);
+      }
+
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -57,13 +71,24 @@ const FeatureRequests = () => {
       toast({ title: "Already Voted!", description: "You can only give one 'Paws Up' per feature." });
       return;
     }
+    
+    // Handle voting for fallback data locally without API call
+    if (id.startsWith('fallback-')) {
+        toast({ title: "Demo Vote!", description: "This is a placeholder. Your vote isn't saved, but we appreciate the enthusiasm!"});
+        // Optimistic UI update for demo
+        setVotedRequests(prev => new Set(prev).add(id));
+        setRequests(prev =>
+            prev.map(r => (r._id === id ? { ...r, votes: r.votes + 1 } : r)).sort((a, b) => b.votes - a.votes)
+        );
+        return;
+    }
 
     const newVotedSet = new Set(votedRequests);
     newVotedSet.add(id);
     setVotedRequests(newVotedSet);
     sessionStorage.setItem('pawpal_voted_requests', JSON.stringify(Array.from(newVotedSet)));
 
-    // Optimistic UI update
+    // Optimistic UI update for real data
     setRequests(prev =>
       prev.map(r => (r._id === id ? { ...r, votes: r.votes + 1 } : r)).sort((a, b) => b.votes - a.votes)
     );
@@ -105,7 +130,7 @@ const FeatureRequests = () => {
       if (!res.ok) throw new Error('Failed to submit suggestion.');
       setNewSuggestion('');
       toast({ title: "Suggestion Submitted!", description: "Thanks for your feedback! 🐶" });
-      await fetchRequests();
+      await fetchRequests(); // Refresh the list
     } catch (e: any) {
       toast({ title: "Submission Failed", description: e.message || "Could not save your suggestion.", variant: 'destructive' });
     } finally {
