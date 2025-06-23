@@ -12,9 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Filter, Search, AlertTriangle, Loader2, ExternalLink, Eye, Pin, ArrowDownCircle } from "lucide-react";
+import { Filter, Search, AlertTriangle, Loader2, ExternalLink, Eye, Pin, ArrowDownCircle, ChevronUp, ChevronDown } from "lucide-react";
 import Image from "next/image";
 import type { YelpBusiness } from '@/services/yelp';
 import type { PetfinderOrganization } from '@/services/petfinder';
@@ -84,6 +84,7 @@ export default function PetMapDisplay() {
   const [mapKey, setMapKey] = useState(() => `map-${Date.now()}-${Math.random()}`); 
 
   const mapRef = useRef<MapRef | null>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setClientMounted(true);
@@ -224,12 +225,25 @@ export default function PetMapDisplay() {
     setViewState(evt.viewState);
   }, []);
 
+  const handleScroll = (direction: 'up' | 'down') => {
+    if (scrollAreaRef.current) {
+      const viewport = scrollAreaRef.current.children[0] as HTMLElement;
+      if (viewport) {
+        const scrollAmount = direction === 'up' ? -300 : 300;
+        viewport.scrollTo({
+          top: viewport.scrollTop + scrollAmount,
+          behavior: 'smooth'
+        });
+      }
+    }
+  };
+
   if (!clientMounted) {
     return <MapLoader message="Initializing map components..." />;
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="md:col-span-1 shadow-md flex flex-col">
           <CardHeader>
@@ -335,14 +349,6 @@ export default function PetMapDisplay() {
         </div>
       </div>
 
-      <div className="text-center py-2">
-        <Button asChild variant="ghost" className="h-12 w-12 rounded-full animate-bounce text-primary hover:text-primary/80 hover:bg-primary/10">
-            <a href="#matching-locations-list" aria-label="Scroll to matching locations">
-                <ArrowDownCircle className="h-8 w-8" />
-            </a>
-        </Button>
-      </div>
-
       <Card id="matching-locations-list" className="shadow-md scroll-m-20">
         <CardHeader>
           <CardTitle className="font-headline">Matching Locations</CardTitle>
@@ -352,7 +358,7 @@ export default function PetMapDisplay() {
           {error && <div className="mt-4 text-sm text-red-600 flex items-center"><AlertTriangle className="w-4 h-4 mr-2"/>{error}</div>}
           
           {!isLoading && !error && displayedLocations.length > 0 ? (
-            <ScrollArea className="h-[400px]"> 
+            <ScrollArea className="h-[400px]" ref={scrollAreaRef}> 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-1">
                 {displayedLocations.map(loc => (
                   <div key={loc.id} className="p-3 border rounded-md bg-card hover:shadow-lg transition-shadow flex flex-col">
@@ -398,6 +404,16 @@ export default function PetMapDisplay() {
             !isLoading && !error && <p className="text-muted-foreground text-center py-4">No locations to display. Try adjusting your search or filters.</p>
           )}
         </CardContent>
+        {displayedLocations.length > 0 && (
+          <CardFooter className="flex justify-center gap-2">
+            <Button variant="outline" size="icon" onClick={() => handleScroll('up')} aria-label="Scroll up">
+              <ChevronUp className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" onClick={() => handleScroll('down')} aria-label="Scroll down">
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </CardFooter>
+        )}
       </Card>
     </div>
   );
