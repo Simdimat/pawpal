@@ -2,12 +2,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { PawPrint, Loader2, AlertCircle } from 'lucide-react';
+import { PawPrint, Loader2, AlertCircle, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { ScrollArea } from '../ui/scroll-area';
 
 interface FeatureRequest {
   _id: string;
@@ -15,11 +14,16 @@ interface FeatureRequest {
   votes: number;
 }
 
+const placeholderRequests: FeatureRequest[] = [
+  { _id: 'placeholder1', text: 'Add pet profiles for quick vet info', votes: 5 },
+  { _id: 'placeholder2', text: 'Offer training tips from experts', votes: 4 },
+  { _id: 'placeholder3', text: 'Organize local dog meetups', votes: 3 },
+];
+
 const inProgressFeatures = [
-  "AI-powered pet adoption matching service.",
-  "Integration with local dog training classes.",
-  "Community forum for pet owners.",
-  "Real-time alerts for lost pets in the area.",
+  "Full login and password support",
+  "Enhanced map filters",
+  "More AI-powered tips",
 ];
 
 const FeatureRequests = () => {
@@ -32,7 +36,6 @@ const FeatureRequests = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Load voted requests from session storage
     const voted = sessionStorage.getItem('pawpal_voted_requests');
     if (voted) {
       setVotedRequests(new Set(JSON.parse(voted)));
@@ -42,13 +45,19 @@ const FeatureRequests = () => {
 
   const fetchRequests = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const res = await fetch('/api/features');
-      if (!res.ok) throw new Error('Failed to fetch feature requests.');
+      if (!res.ok) throw new Error('Failed to fetch requests. Showing placeholders.');
       const data: FeatureRequest[] = await res.json();
-      setRequests(data);
+      if (data.length === 0) {
+        setRequests(placeholderRequests);
+      } else {
+        setRequests(data);
+      }
     } catch (e: any) {
       setError(e.message);
+      setRequests(placeholderRequests); // On error, show placeholders
     } finally {
       setIsLoading(false);
     }
@@ -56,28 +65,39 @@ const FeatureRequests = () => {
 
   const handleVote = async (id: string) => {
     if (votedRequests.has(id)) {
-      toast({ title: "Already Voted!", description: "You can only give one 'Paws Up' per feature.", variant: 'default' });
+      toast({ title: "Already Voted!", description: "You can only give one 'Paws Up' per feature." });
       return;
     }
+     if (id.startsWith('placeholder')) {
+      toast({ title: "Demo Vote!", description: "This is a placeholder. Your vote isn't saved, but we appreciate the enthusiasm!" });
+       // Optimistic UI update for demo
+       setRequests(prev =>
+        prev.map(r => (r._id === id ? { ...r, votes: r.votes + 1 } : r)).sort((a, b) => b.votes - a.votes)
+      );
+      const newVotedSet = new Set(votedRequests);
+      newVotedSet.add(id);
+      setVotedRequests(newVotedSet);
+      return;
+    }
+
 
     const newVotedSet = new Set(votedRequests);
     newVotedSet.add(id);
     setVotedRequests(newVotedSet);
     sessionStorage.setItem('pawpal_voted_requests', JSON.stringify(Array.from(newVotedSet)));
 
-    // Optimistic UI update
     setRequests(prev =>
       prev.map(r => (r._id === id ? { ...r, votes: r.votes + 1 } : r)).sort((a, b) => b.votes - a.votes)
     );
 
     try {
-      await fetch('/api/features/vote', {
+      const res = await fetch('/api/features/vote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       });
+       if (!res.ok) throw new Error('Server error, vote not saved.');
     } catch (e) {
-      // Revert optimistic update on error
       setRequests(prev =>
         prev.map(r => (r._id === id ? { ...r, votes: r.votes - 1 } : r)).sort((a, b) => b.votes - a.votes)
       );
@@ -102,10 +122,9 @@ const FeatureRequests = () => {
       if (!res.ok) throw new Error('Failed to submit suggestion.');
       setNewSuggestion('');
       toast({ title: "Suggestion Submitted!", description: "Thanks for your feedback! 🐶" });
-      await fetchRequests(); // Refresh the list
+      await fetchRequests();
     } catch (e: any) {
-      setError(e.message);
-      toast({ title: "Submission Failed", description: "Could not save your suggestion.", variant: 'destructive' });
+      toast({ title: "Submission Failed", description: e.message || "Could not save your suggestion.", variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -113,65 +132,67 @@ const FeatureRequests = () => {
 
   return (
     <section className="w-full">
-      <Card className="bg-white/50 dark:bg-black/20 shadow-lg border-primary/20">
-        <CardContent className="p-6 grid md:grid-cols-2 gap-8">
-          {/* In Progress Section */}
-          <div>
-            <CardHeader className="p-0 mb-4">
-              <CardTitle className="font-headline text-2xl text-primary">Currently In Progress & Coming Soon</CardTitle>
-              <CardDescription>Features we're actively developing based on your feedback.</CardDescription>
-            </CardHeader>
-            <ul className="space-y-2 list-disc list-inside text-foreground/90">
+      <Card className="bg-primary/10 dark:bg-card shadow-lg border-primary/20">
+        <CardContent className="p-8 grid md:grid-cols-2 gap-x-12 gap-y-8">
+          
+          <div className="space-y-4">
+            <h3 className="text-center text-2xl font-bold text-primary">Currently In Progress & Coming Soon</h3>
+            <ul className="space-y-2 text-foreground/90 pl-4">
               {inProgressFeatures.map((feature, index) => (
-                <li key={index}>{feature}</li>
+                <li key={index} className="flex items-center gap-3">
+                  <Check className="h-5 w-5 text-green-600 flex-shrink-0" />
+                  <span>{feature}</span>
+                </li>
               ))}
             </ul>
           </div>
 
-          {/* Feature Requests Section */}
-          <div>
-            <CardHeader className="p-0 mb-4">
-              <CardTitle className="font-headline text-2xl text-primary">Feature Requests</CardTitle>
-              <CardDescription>Vote for your favorite ideas or suggest a new one!</CardDescription>
-            </CardHeader>
+          <div className="space-y-4">
+            <div className="text-center">
+               <h3 className="text-2xl font-bold text-primary">Feature Requests</h3>
+               <p className="text-muted-foreground text-sm">Vote or suggest new ideas for PawPal.</p>
+            </div>
             
-            <ScrollArea className="h-48 pr-4 mb-4">
-              {isLoading && <div className="flex justify-center items-center h-full"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>}
-              {error && <div className="text-red-500 flex items-center gap-2"><AlertCircle size={16} /> {error}</div>}
-              {!isLoading && !error && (
-                <ul className="space-y-3">
+            <form onSubmit={handleSubmitSuggestion} className="flex items-center gap-2">
+              <Input
+                type="text"
+                placeholder="Suggest a feature..."
+                value={newSuggestion}
+                onChange={e => setNewSuggestion(e.target.value)}
+                disabled={isSubmitting}
+                className="bg-background"
+                aria-label="Suggest a new feature"
+              />
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Submit'}
+              </Button>
+            </form>
+            
+            <div className="space-y-2">
+              {isLoading && <div className="flex justify-center items-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>}
+              {error && !isLoading && <div className="text-red-500 text-sm flex items-center gap-2 p-2"><AlertCircle size={16} /> {error}</div>}
+              
+              {!isLoading && requests.length > 0 && (
+                <ul className="space-y-2">
                   {requests.map(req => (
-                    <li key={req._id} className="flex items-center justify-between bg-secondary/50 p-2 rounded-md">
-                      <span className="text-sm">{req.text}</span>
+                    <li key={req._id} className="flex items-center justify-between bg-background/50 p-3 border-2 border-dashed border-primary/30 rounded-lg">
+                      <span className="text-sm mr-2">{req.text}</span>
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
                         onClick={() => handleVote(req._id)}
                         disabled={votedRequests.has(req._id)}
-                        className="gap-1"
+                        className="flex items-center gap-2 rounded-full px-3 shrink-0"
+                        aria-label={`Vote for ${req.text}`}
                       >
-                        <PawPrint size={14} className={votedRequests.has(req._id) ? "text-primary fill-primary/20" : "text-primary"} />
-                        {req.votes}
+                        <PawPrint size={16} className={votedRequests.has(req._id) ? "text-accent fill-accent/30" : "text-accent"} />
+                        <span className="font-bold text-sm">{req.votes}</span>
                       </Button>
                     </li>
                   ))}
                 </ul>
               )}
-            </ScrollArea>
-
-            <form onSubmit={handleSubmitSuggestion} className="flex items-center gap-2 mt-4">
-              <Input
-                type="text"
-                placeholder="Suggest a new feature for PawPal..."
-                value={newSuggestion}
-                onChange={e => setNewSuggestion(e.target.value)}
-                disabled={isSubmitting}
-              />
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Suggest'}
-              </Button>
-            </form>
-
+            </div>
           </div>
         </CardContent>
       </Card>
