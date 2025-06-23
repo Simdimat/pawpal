@@ -414,7 +414,7 @@ const ChatInterface = () => {
                   key={i}
                   variant="outline"
                   size="sm"
-                  className="text-xs h-auto py-1.5 px-3 bg-card hover:bg-secondary whitespace-normal text-left"
+                  className="text-xs h-auto py-1.5 px-3 bg-secondary hover:bg-muted whitespace-normal text-left"
                   onClick={() => handleSuggestionClick(q)}
                 >
                   {q}
@@ -434,7 +434,6 @@ const ChatInterface = () => {
               >
                 {message.sender === 'ai' && (
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src="https://placehold.co/40x40.png" alt="PawPal AI" data-ai-hint="robot dog" />
                     <AvatarFallback><Bot size={18}/></AvatarFallback>
                   </Avatar>
                 )}
@@ -481,7 +480,6 @@ const ChatInterface = () => {
              { (isLoading || isFetchingContext) && messages[messages.length-1]?.sender === 'user' && (
               <div className="flex items-end gap-2 justify-start mt-4">
                   <Avatar className="h-8 w-8">
-                      <AvatarImage src="https://placehold.co/40x40.png" alt="PawPal AI" data-ai-hint="robot dog" />
                       <AvatarFallback><Bot size={18}/></AvatarFallback>
                   </Avatar>
                   <div className="max-w-[70%] rounded-lg px-4 py-2 text-sm shadow whitespace-pre-wrap bg-card text-card-foreground border">

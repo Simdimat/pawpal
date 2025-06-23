@@ -1,4 +1,3 @@
-
 // @refresh reset
 'use client';
 
@@ -59,7 +58,7 @@ const SAN_DIEGO_INITIAL_VIEW_STATE = {
   bearing: 0,
 };
 
-const MAP_STYLE = "https://demotiles.maplibre.org/style.json";
+const MAP_STYLE = "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
 
 // --- Helper Component for Loading State ---
 const MapLoader = ({ message, details }: { message: string, details?: string }) => (
@@ -145,7 +144,7 @@ export default function PetMapDisplay() {
                     id: `pf-${org.id}`,
                     name: org.name,
                     type: 'Shelter',
-                    address: `${org.address?.address1 || ''}, ${org.address?.city || ''}, ${org.address?.state || ''}`.replace(/^,|,$/g, '').trim(),
+                    address: `${org.address?.address1 || ''}, ${org.address?.city || ''}, ${org.address?.state || ''} ${org.address?.postcode || ''}`.replace(/^,|,$/g, '').trim(),
                     imageUrl: org.photos?.[0]?.medium,
                     websiteUrl: org.website || org.url,
                     dataAiHint: "animal shelter building",

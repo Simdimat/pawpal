@@ -79,7 +79,7 @@ async function fetchGoogleSearchResults(
   const lowerUserQuestion = userQuestion.toLowerCase();
   localDebugLogs.push(`[Experimental Reddit] userQuestion after toLowerCase(): "${lowerUserQuestion}"`);
 
-  const googleQueryString = `${lowerUserQuestion} site:reddit.com`;
+  const googleQueryString = `${lowerUserQuestion} (san diego) site:reddit.com`;
   localDebugLogs.push(`[Experimental Reddit] Full googleQueryString for Scrapingdog (pre-encoding): "${googleQueryString}"`);
 
   const encodedGoogleQueryString = encodeURIComponent(googleQueryString);
