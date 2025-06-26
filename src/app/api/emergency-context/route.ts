@@ -1,7 +1,7 @@
 
 import {NextResponse} from 'next/server';
 import type {NextRequest} from 'next/server';
-// import {getEmergencyContext, type GetEmergencyContextInput} from '@/ai/flows/emergency-flow-context';
+import {getEmergencyContext, type GetEmergencyContextInput} from '@/ai/flows/emergency-flow-context';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,19 +12,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({error: 'Emergency type is required'}, {status: 400});
     }
 
-    // const aiInput: GetEmergencyContextInput = {
-    //   emergencyType,
-    // };
+    const aiInput: GetEmergencyContextInput = {
+      emergencyType,
+    };
     
-    // const result = await getEmergencyContext(aiInput);
+    const result = await getEmergencyContext(aiInput);
     
-    // return NextResponse.json(result, {status: 200});
-
-    // Return a placeholder since Genkit flow is commented out
-    return NextResponse.json({ 
-      redditAdvice: "Supplementary community advice feature is temporarily unavailable." 
-    }, {status: 200});
-
+    return NextResponse.json(result, {status: 200});
 
   } catch (error) {
     console.error('Emergency Context API Error:', error);

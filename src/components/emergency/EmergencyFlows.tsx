@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -56,7 +57,8 @@ const EmergencyFlows = () => {
       if (!response.ok) {
         // Don't throw an error, context is supplementary
         console.warn(`Failed to load context for ${emergencyType}`);
-        setEmergencyContexts(prev => ({ ...prev, [flowId]: { redditAdvice: "Could not load supplementary advice." } }));
+        const errorData = await response.json().catch(() => ({ redditAdvice: "Could not load supplementary advice."}));
+        setEmergencyContexts(prev => ({ ...prev, [flowId]: { redditAdvice: errorData.error || "Could not load supplementary advice." } }));
         return;
       }
       const data: { redditAdvice: string } = await response.json();
@@ -122,13 +124,23 @@ const EmergencyFlows = () => {
                <div className="mt-6">
                 <h4 className="font-semibold mb-2 text-md">Relevant Contacts:</h4>
                 <ul className="space-y-2 text-sm">
-                  {flow.relevantContacts.map((contact, idx) => (
-                    <li key={idx} className="p-3 border rounded-md bg-secondary/50">
-                      <strong>{contact.name}</strong>
-                      {contact.number && <p>Phone: <a href={`tel:${contact.number}`} className="text-primary hover:underline">{contact.number}</a></p>}
-                      {contact.website && <p>Website: <a href={contact.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center">{contact.website} <ExternalLink className="ml-1 h-3 w-3"/></a></p>}
-                    </li>
-                  ))}
+                  {flow.relevantContacts.map((contact, idx) => {
+                    if (contact.name === "Your Veterinarian") {
+                      return (
+                        <li key="your-vet-card" className="p-3 border rounded-md bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                          <strong className="text-blue-800 dark:text-blue-300">Your Primary Veterinarian</strong>
+                          <p className="text-foreground/80">Always try to contact your primary vet first during business hours.</p>
+                        </li>
+                      );
+                    }
+                    return (
+                      <li key={idx} className="p-3 border rounded-md bg-secondary/50">
+                        <strong>{contact.name}</strong>
+                        {contact.number && <p>Phone: <a href={`tel:${contact.number}`} className="text-primary hover:underline">{contact.number}</a></p>}
+                        {contact.website && <p>Website: <a href={contact.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center">{contact.website} <ExternalLink className="ml-1 h-3 w-3"/></a></p>}
+                      </li>
+                    );
+                  })}
                 </ul>
                </div>
             )}
@@ -146,7 +158,7 @@ const EmergencyFlows = () => {
               </Button>
               {emergencyContexts[flow.id]?.redditAdvice && (
                 <Card className="bg-accent/10 border-accent">
-                  <CardHeader><CardTitle className="text-sm text-accent-foreground">Community Insights (from Reddit)</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="text-sm text-accent-foreground">Community Insights</CardTitle></CardHeader>
                   <CardContent><p className="text-xs text-accent-foreground/90 whitespace-pre-wrap">{emergencyContexts[flow.id]?.redditAdvice}</p></CardContent>
                 </Card>
               )}
