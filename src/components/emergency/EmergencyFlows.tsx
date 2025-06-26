@@ -23,16 +23,18 @@ interface EmergencyFlow {
   relevantContacts?: { name: string; number?: string; website?: string }[];
 }
 
+/*
 interface EmergencyContext {
   redditAdvice?: string;
 }
+*/
 
 const EmergencyFlows = () => {
   const [flows, setFlows] = useState<EmergencyFlow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [contextLoading, setContextLoading] = useState<Record<string, boolean>>({});
-  const [emergencyContexts, setEmergencyContexts] = useState<Record<string, EmergencyContext>>({});
+  // const [contextLoading, setContextLoading] = useState<Record<string, boolean>>({});
+  // const [emergencyContexts, setEmergencyContexts] = useState<Record<string, EmergencyContext>>({});
 
   useEffect(() => {
     const fetchFlows = async () => {
@@ -50,6 +52,7 @@ const EmergencyFlows = () => {
     fetchFlows();
   }, []);
 
+  /*
   const fetchEmergencyContext = async (emergencyType: string, flowId: string) => {
     setContextLoading(prev => ({ ...prev, [flowId]: true }));
     try {
@@ -70,6 +73,7 @@ const EmergencyFlows = () => {
       setContextLoading(prev => ({ ...prev, [flowId]: false }));
     }
   };
+  */
 
   if (loading) {
     return <div className="flex justify-center items-center py-10"><Loader2 className="h-8 w-8 animate-spin text-primary" /><p className="ml-2">Loading emergency procedures...</p></div>;
@@ -145,6 +149,7 @@ const EmergencyFlows = () => {
                </div>
             )}
             
+            {/*
             <div className="mt-6 border-t pt-4">
               <Button 
                 variant="outline" 
@@ -163,6 +168,7 @@ const EmergencyFlows = () => {
                 </Card>
               )}
             </div>
+            */}
           </AccordionContent>
         </AccordionItem>
       ))}
