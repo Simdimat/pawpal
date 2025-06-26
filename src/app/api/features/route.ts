@@ -40,17 +40,19 @@ export async function POST(request: NextRequest) {
     }
 
     const { db } = await connectToDatabase();
-    const newRequest = {
+    const newSuggestionForReview = {
       text: suggestion.trim(),
-      votes: 0,
+      votes: 0, // Suggestions start with 0 votes
       createdAt: new Date(),
+      status: 'pending_review', // Add a status for moderation
     };
 
-    const result = await db.collection('feature_requests').insertOne(newRequest);
+    // Insert into a separate collection for moderation
+    const result = await db.collection('feature_suggestions').insertOne(newSuggestionForReview);
 
-    return NextResponse.json({ message: 'Suggestion added successfully', insertedId: result.insertedId }, { status: 201 });
+    return NextResponse.json({ message: 'Suggestion submitted for review', insertedId: result.insertedId }, { status: 201 });
   } catch (error) {
-    console.error('Error adding feature suggestion:', error);
+    console.error('Error adding feature suggestion for review:', error);
     return NextResponse.json({ error: 'Failed to add suggestion' }, { status: 500 });
   }
 }

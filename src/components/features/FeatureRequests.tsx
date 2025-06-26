@@ -129,8 +129,8 @@ const FeatureRequests = () => {
       });
       if (!res.ok) throw new Error('Failed to submit suggestion.');
       setNewSuggestion('');
-      toast({ title: "Suggestion Submitted!", description: "Thanks for your feedback! 🐶" });
-      await fetchRequests(); // Refresh the list
+      toast({ title: "Suggestion Submitted!", description: "Thanks! Your idea is under review. 🐶" });
+      // No longer refreshing the list automatically: await fetchRequests(); 
     } catch (e: any) {
       toast({ title: "Submission Failed", description: e.message || "Could not save your suggestion.", variant: 'destructive' });
     } finally {
