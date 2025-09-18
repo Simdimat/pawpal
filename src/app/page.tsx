@@ -1,20 +1,16 @@
-
 'use client';
 
 import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { MessageSquare, Map, AlertTriangle, Hospital, Dog, XIcon, ChevronDown, ChevronUp, MessageCircle } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import Image from 'next/image';
 
 import ChatInterface from '@/components/chat/ChatInterface';
-import PetMapDisplay from '@/components/map/PetMapDisplay';
 import EmergencyFlows from '@/components/emergency/EmergencyFlows';
-import VetListings from '@/components/vets/VetListings';
 import ShelterListings from '@/components/shelters/ShelterListings';
 import FeatureRequests from '@/components/features/FeatureRequests';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from '@/lib/utils';
 
 export default function HomePage() {
@@ -36,25 +32,22 @@ export default function HomePage() {
               <span className="text-primary">PawPal SD</span>
             </h1>
             <p className="mt-4 max-w-3xl mx-auto text-lg text-foreground/80 md:text-xl">
-              This site is your all-in-one resource for pet life in San Diego! Use the interactive <a href="#map-section" className="text-primary hover:underline font-semibold">Pet Map</a> to find parks and vets, explore the <a href="#vets-section" className="text-primary hover:underline font-semibold">Veterinarian Information Hub</a>, find <a href="#dog-day-out-section" className="text-primary hover:underline font-semibold">Dog Day Out &amp; Volunteer</a> opportunities, or ask our <a href="#" onClick={() => setIsChatOpen(true)} className="text-primary hover:underline font-semibold">AI Assistant</a> for quick answers. Your feedback shapes our development, so please share your ideas below!
+              This site is your all-in-one resource for pet life in San Diego! Explore the{' '}
+              <a href="#dog-day-out-section" className="text-primary hover:underline font-semibold">
+                Dog Day Out &amp; Volunteer
+              </a>{' '}
+              opportunities, check the{' '}
+              <a href="#emergency-section" className="text-primary hover:underline font-semibold">
+                Pet Emergency Guide
+              </a>, or ask our{' '}
+              <a href="#" onClick={() => setIsChatOpen(true)} className="text-primary hover:underline font-semibold">
+                AI Assistant
+              </a>{' '}
+              for quick answers. Your feedback shapes our development, so please share your ideas below!
             </p>
           </section>
 
           <FeatureRequests />
-
-          <section id="map-section" className="scroll-m-20 py-8">
-            <Card className="shadow-lg">
-              <CardHeader className="text-center">
-                <CardTitle className="text-3xl font-headline text-primary">Pet Map SD</CardTitle>
-                <CardDescription className="text-foreground/80">
-                  Discover dog-friendly parks, beaches, vets, and restaurants in San Diego.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <PetMapDisplay />
-              </CardContent>
-            </Card>
-          </section>
 
           <section id="emergency-section" className="scroll-m-20 py-8">
             <Card className="shadow-lg">
@@ -67,31 +60,6 @@ export default function HomePage() {
               </CardHeader>
               <CardContent>
                 <EmergencyFlows />
-              </CardContent>
-            </Card>
-          </section>
-
-          <section id="vets-section" className="scroll-m-20 py-8">
-            <Card className="shadow-lg">
-              <CardHeader className="text-center">
-                <CardTitle className="text-3xl font-headline text-primary">Veterinarian Information Hub</CardTitle>
-                <CardDescription className="text-foreground/80">
-                  Find veterinarians in San Diego and explore community insights about vet services in Tijuana.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="sd_vets" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="sd_vets">San Diego Vets</TabsTrigger>
-                    <TabsTrigger value="tj_vets">Tijuana Vets Info</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="sd_vets">
-                    <VetListings locationType="SD" />
-                  </TabsContent>
-                  <TabsContent value="tj_vets">
-                    <VetListings locationType="TJ" />
-                  </TabsContent>
-                </Tabs>
               </CardContent>
             </Card>
           </section>
